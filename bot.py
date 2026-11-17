@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Background Listener + Fallback + Set Photo)
+Virtual Number Sales Bot — Final (Listener + Fallback + 42777 + Set Photo)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -44,7 +44,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 log = logging.getLogger("vbot")
 router = Router()
 
-# 🔑 نگهدارنده listenerها: {account_id: client}
 LISTENERS: dict = {}
 
 # ════════════════ I18N ════════════════
@@ -69,7 +68,6 @@ T = {
         "get_code_ok": "🔑 کد ورود شما: <code>{code}</code>{twofa}\n\n👇 برای خروج ربات از این اکانت روی دکمه زیر بزنید:",
         "get_code_fail": "⚠️ کدی یافت نشد. ابتدا در اپ تلگرام شماره را وارد کنید تا کد ارسال شود، سپس دوباره تلاش کنید.",
         "twofa_line": "\n🔐 رمز دو مرحله‌ای: <code>{pw}</code>",
-        
         "charge_amount": "💰 لطفاً مبلغ مورد نظر (به تومان) را فقط به صورت عدد وارد کنید (بدون کاما و نقطه):",
         "charge_card": ("💳 <b>درخواست شارژ حساب</b>\n\n"
                         "مبلغ قابل پرداخت (کلیک کنید تا کپی شود):\n<code>{amount}</code> تومان\n\n"
@@ -82,31 +80,25 @@ T = {
         "charge_receipt_sent": "✅ رسید شما برای بررسی به مالک ارسال شد.\nلطفاً منتظر تایید بمانید.",
         "charge_new_admin": "💳 <b>درخواست شارژ جدید</b>\n\nآیدی کاربر: <code>{uid}</code>\nیوزرنیم: {username}\nمبلغ: <b>{amount:,}</b> تومان",
         "charge_approved_user": "🎉 حساب شما با موفقیت شارژ شد!\n\nمبلغ: <b>{amount:,}</b> تومان\n💰 موجودی فعلی شما: <b>{balance:,}</b> تومان\n\nممنون از صبوری شما 🌹",
-        
         "add_panel_name": "🏷 نام پنل را وارد کنید:",
         "add_panel_price": "💰 قیمت (تومان) را وارد کنید:",
         "add_panel_cat": "📂 دسته‌بندی را انتخاب کنید:",
         "add_panel_flag": "🌍 فلگ کشور را وارد کنید (مثلاً 🇺🇸):",
         "add_panel_ok": "✅ پنل ایجاد شد.",
-        
         "add_acc_choose_panel": "➕ <b>افزودن شماره</b>\nیک پنل انتخاب کنید:",
         "add_acc_phone": "📱 شماره را با فرمت بین‌المللی ارسال کنید (مثلاً +989121234567):",
         "add_acc_code": "📨 کد ارسال شده را وارد کنید:",
         "add_acc_2fa": "🔐 رمز دو مرحله‌ای را وارد کنید:",
         "add_acc_ok": "✅ اکانت با موفقیت اضافه شد و listener فعال شد!",
         "add_acc_err": "❌ خطا در افزودن اکانت:\n<code>{err}</code>",
-        
         "inc_balance_prompt": "👤 آیدی عددی کاربری که می‌خواهید موجودیش را افزایش دهید را وارد کنید:",
         "inc_balance_amount": "💰 مبلغی که می‌خواهید به موجودی این کاربر اضافه کنید را وارد کنید:",
         "inc_balance_ok": "✅ موجودی کاربر با موفقیت افزایش یافت.",
-        
         "del_panel_choose": "🗑 <b>حذف پنل</b>\nکدام پنل را می‌خواهید حذف کنید؟ (توجه: تمام شماره‌های داخل آن نیز پاک می‌شوند)",
         "del_panel_ok": "✅ پنل و تمام شماره‌های آن با موفقیت حذف شد.",
         "del_panel_empty": "❌ هیچ پنلی برای حذف وجود ندارد.",
-        
         "logout_btn": "🚪 خروج از اکانت",
         "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nنشست ربات از اکانت شما قطع شد.",
-        
         "report_text": ("✅ <b>گزارش خرید موفق</b>\n\n"
                         "▫️ شناسه خریدار: <code>{uid}</code>\n"
                         "▫️ کشور: {flag}\n"
@@ -116,7 +108,6 @@ T = {
                         "▫️ تاریخ خرید: <code>{date}</code>\n\n"
                         "📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید."),
         "buy_from_channel": "🛒 ربات شماره مجازی",
-        
         "btn_profile": "👤 حساب کاربری", "btn_support": "🎧 پشتیبانی",
         "btn_buy": "🛒 خرید شماره", "btn_guide": "📚 توضیحات",
         "btn_stock": "📦 لیست موجودی", "btn_charge": "💳 شارژ حساب",
@@ -125,7 +116,6 @@ T = {
         "btn_del_panel": "🗑 حذف پنل",
         "btn_inc_balance": "💰 افزایش موجودی",
         "btn_back": "◀️ بازگشت", "btn_home": "🏠 منوی اصلی",
-        
         "guide_msg": "📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:",
         "open_channel": "🔗 ورود به کانال",
         "invalid": "❌ مقدار نامعتبر.",
@@ -218,7 +208,7 @@ class DB:
             db.row_factory = aiosqlite.Row
             cur = await db.execute("SELECT * FROM panels WHERE category=? ORDER BY id DESC", (category,))
             return [dict(r) for r in await cur.fetchall()]
-            
+
     async def all_panels(self) -> list[dict]:
         async with aiosqlite.connect(self.path) as db:
             db.row_factory = aiosqlite.Row
@@ -258,25 +248,24 @@ class DB:
             cur = await db.execute("SELECT * FROM accounts WHERE id=?", (aid,))
             row = await cur.fetchone()
             return dict(row) if row else None
-            
+
     async def clear_session(self, aid):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("UPDATE accounts SET session=NULL WHERE id=?", (aid,))
             await db.commit()
-            
+
     async def delete_panel(self, pid):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM panels WHERE id=?", (pid,))
             await db.execute("DELETE FROM accounts WHERE panel_id=?", (pid,))
             await db.commit()
-            
+
     async def check_panel_empty(self, pid) -> bool:
         async with aiosqlite.connect(self.path) as db:
             cur = await db.execute("SELECT COUNT(*) FROM accounts WHERE panel_id=? AND status='available'", (pid,))
             row = await cur.fetchone()
             return row[0] == 0
 
-    # 🔑 متدهای مربوط به codes
     async def save_code(self, aid, code):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("INSERT INTO codes(account_id, code, received_at) VALUES(?,?,?)",
@@ -337,9 +326,7 @@ async def main_menu_kb(uid: int):
         row_ch.append(B(t("fa","btn_report_channel"), url=REPORT_CHANNEL_LINK))
     if row_ch:
         rows.append(row_ch)
-        
     rows.append([B(t("fa","btn_guide"), cb="guide")])
-    
     if is_admin:
         rows.append([B(t("fa","btn_add_account"), cb="acc_add"), B(t("fa","btn_add_panel"), cb="panel_add")])
         if uid == OWNER_ID:
@@ -367,10 +354,18 @@ async def panels_kb(category):
     return KB(rows)
 
 # ════════════════ LISTENER MANAGEMENT ════════════════
+def _is_official_sender(sender_id, sender_phone, sender_username):
+    if sender_id in (777000, 42777, 7770000):
+        return True
+    if sender_phone and str(sender_phone).lstrip("+") in ("42777", "777000", "7770000"):
+        return True
+    if sender_username and sender_username.lower() in ("telegram",):
+        return True
+    return False
+
 async def start_listener(aid: int, session_str: str):
-    """راه‌اندازی listener پس‌زمینه برای یک اکانت"""
     if aid in LISTENERS:
-        return  # قبلاً فعاله
+        return
     try:
         client = TelegramClient(StringSession(session_str), TG_API_ID, TG_API_HASH)
         await client.connect()
@@ -378,9 +373,16 @@ async def start_listener(aid: int, session_str: str):
             log.warning(f"[listener] acc {aid} not authorized")
             await client.disconnect()
             return
-        
+
         async def on_new_message(event):
             try:
+                sender = await event.get_sender()
+                sender_id = event.sender_id
+                sender_phone = getattr(sender, "phone", None) if sender else None
+                sender_username = getattr(sender, "username", None) if sender else None
+                log.info(f"[listener] msg for acc {aid} from id={sender_id} phone={sender_phone} user={sender_username} text={(event.raw_text or '')[:60]!r}")
+                if not _is_official_sender(sender_id, sender_phone, sender_username):
+                    return
                 txt = event.raw_text or ""
                 match = re.search(r'\b(\d{5,6})\b', txt)
                 if match:
@@ -388,12 +390,11 @@ async def start_listener(aid: int, session_str: str):
                     log.info(f"[listener] ✅ code {match.group(1)} saved for acc {aid}")
             except Exception as e:
                 log.warning(f"[listener] handler error: {e}")
-        
-        client.add_event_handler(on_new_message, events.NewMessage(chats=[777000, 42777, 7770000]))
+
+        client.add_event_handler(on_new_message, events.NewMessage())
         LISTENERS[aid] = client
         log.info(f"[listener] started for acc {aid}")
-        
-        # نگه داشتن listener در پس‌زمینه
+
         async def keep_alive():
             try:
                 await client.run_until_disconnected()
@@ -401,14 +402,12 @@ async def start_listener(aid: int, session_str: str):
                 log.warning(f"[listener] acc {aid} disconnected: {e}")
             finally:
                 LISTENERS.pop(aid, None)
-        
+
         asyncio.create_task(keep_alive())
     except Exception as e:
         log.warning(f"[listener] failed to start for acc {aid}: {e}")
 
-
 async def stop_listener(aid: int):
-    """توقف listener یک اکانت"""
     client = LISTENERS.pop(aid, None)
     if client:
         try:
@@ -417,15 +416,12 @@ async def stop_listener(aid: int):
         except Exception:
             pass
 
-
 async def start_all_listeners():
-    """در startup ربات، برای همه اکانت‌های دارای session listener راه‌اندازی کن"""
     accounts = await db.all_available_sessions()
     log.info(f"[startup] starting listeners for {len(accounts)} accounts...")
     for acc in accounts:
         if acc.get("session"):
             await start_listener(acc["id"], acc["session"])
-
 
 # ════════════════ HANDLERS ════════════════
 @router.message(CommandStart())
@@ -471,7 +467,6 @@ async def cb_guide(cb: CallbackQuery):
     await cb.message.edit_text(t("fa","guide_msg"), reply_markup=KB(rows))
     await cb.answer()
 
-# ═════ لیست موجودی و خرید ═════
 @router.callback_query(F.data == "stock")
 async def cb_stock(cb: CallbackQuery):
     await cb.message.edit_text(t("fa","buy_title"), reply_markup=categories_kb("scat"))
@@ -509,25 +504,21 @@ async def cb_panel(cb: CallbackQuery):
     pid = int(cb.data.split(":",1)[1])
     p = await db.get_panel(pid)
     if not p: return await cb.answer("پنل یافت نشد.", show_alert=True)
-    
     acc = await db.get_available_account(pid)
     if not acc:
         return await cb.answer(t("fa","no_accounts"), show_alert=True)
-        
     u = await db.get_user(cb.from_user.id)
     if u["balance"] < p["price"]:
         return await cb.answer(t("fa","balance_low").format(bal=u["balance"], need=p["price"]), show_alert=True)
-        
     await db.deduct_balance(cb.from_user.id, p["price"])
     await db.sell_account(acc["id"], cb.from_user.id)
-    
     if REPORT_CHANNEL_LINK:
         try:
             ch_id = REPORT_CHANNEL_LINK.split("/")[-1]
             ch_id = f"@{ch_id}" if not ch_id.startswith("-") else ch_id
             rep_txt = t("fa","report_text").format(
                 uid=cb.from_user.id, flag=p["flag"], panel=p["name"],
-                phone=acc["phone"], amount=p["price"], 
+                phone=acc["phone"], amount=p["price"],
                 date=datetime.now().strftime("%Y-%m-%d %H:%M")
             )
             me = await cb.bot.get_me()
@@ -535,34 +526,31 @@ async def cb_panel(cb: CallbackQuery):
             await cb.bot.send_message(ch_id, rep_txt, reply_markup=KB([[btn]]))
         except Exception as e:
             log.warning(f"Could not send report to channel: {e}")
-
     if await db.check_panel_empty(pid):
         await db.delete_panel(pid)
-
     txt = t("fa","buy_success").format(phone=acc["phone"], twofa=acc["twofa"] or "ندارد")
     kb = KB([[B(t("fa","get_code_btn"), cb=f"getcode:{acc['id']}")], [B(t("fa","btn_home"), cb="home")]])
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد — گزینه B: listener + fallback ═════
+# ═════ دریافت کد — listener + fallback کامل ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
     if not acc or acc["sold_to"] != cb.from_user.id:
         return await cb.answer("⛔", show_alert=True)
-    
     await cb.answer(t("fa","get_code_wait"))
-    
-    # 🟢 مرحله ۱: از listener پس‌زمینه بخون (سریع‌ترین راه)
+
     code = None
-    for _ in range(10):  # ~30 ثانیه صبر
+    # مرحله ۱: از listener
+    for _ in range(10):
         code = await db.get_latest_code(aid)
         if code:
             break
         await asyncio.sleep(3)
-    
-    # 🟡 مرحله ۲ (fallback): اگه listener چیزی نداشت، خودمون مستقیم چک کنیم
+
+    # مرحله ۲: fallback مستقیم
     if not code and acc.get("session"):
         log.info(f"[getcode] fallback for acc {aid}")
         client = None
@@ -575,27 +563,74 @@ async def cb_getcode(cb: CallbackQuery):
                     await client.get_dialogs(limit=50)
                 except Exception:
                     pass
-                
-                OFFICIAL_IDS = [777000, 42777, 7770000]
+
+                OFFICIAL_TARGETS = [(777000, None), (42777, "+42777"), (7770000, None)]
+
                 for attempt in range(3):
-                    for official in OFFICIAL_IDS:
+                    for official_id, official_phone in OFFICIAL_TARGETS:
                         if code: break
                         try:
-                            msgs = await client.get_messages(official, limit=20)
+                            try:
+                                await client.get_entity(official_id)
+                            except Exception:
+                                pass
+                            msgs = await client.get_messages(official_id, limit=20)
                             for msg in msgs:
                                 if not msg or not msg.text:
                                     continue
                                 match = re.search(r'\b(\d{5,6})\b', msg.text)
                                 if match:
                                     code = match.group(1)
+                                    log.info(f"[getcode] found via id {official_id}: {code}")
                                     break
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            log.warning(f"[getcode] id {official_id} failed: {e}")
+
+                        if code: break
+
+                        if official_phone:
+                            try:
+                                entity = await client.get_entity(official_phone)
+                                msgs = await client.get_messages(entity, limit=20)
+                                for msg in msgs:
+                                    if not msg or not msg.text:
+                                        continue
+                                    match = re.search(r'\b(\d{5,6})\b', msg.text)
+                                    if match:
+                                        code = match.group(1)
+                                        log.info(f"[getcode] found via phone {official_phone}: {code}")
+                                        break
+                            except Exception as e:
+                                log.warning(f"[getcode] phone {official_phone} failed: {e}")
+
                     if code:
                         break
                     await asyncio.sleep(2)
-                
-                # session جدید رو ذخیره کن
+
+                # جستجو در همه دیالوگ‌ها
+                if not code:
+                    try:
+                        dialogs = await client.get_dialogs(limit=30)
+                        for dialog in dialogs:
+                            if code: break
+                            try:
+                                dname = (dialog.name or "").lower()
+                                if "telegram" not in dname and dialog.id not in (777000, 42777, 7770000):
+                                    continue
+                                msgs = await client.get_messages(dialog.entity, limit=10)
+                                for msg in msgs:
+                                    if not msg or not msg.text:
+                                        continue
+                                    match = re.search(r'\b(\d{5,6})\b', msg.text)
+                                    if match:
+                                        code = match.group(1)
+                                        log.info(f"[getcode] found in dialog {dialog.name}: {code}")
+                                        break
+                            except Exception:
+                                continue
+                    except Exception as e:
+                        log.warning(f"[getcode] dialog scan failed: {e}")
+
                 new_session = client.session.save()
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute("UPDATE accounts SET session=? WHERE id=?", (new_session, aid))
@@ -607,7 +642,7 @@ async def cb_getcode(cb: CallbackQuery):
             if client:
                 try: await client.disconnect()
                 except: pass
-    
+
     if code:
         extra = t("fa","twofa_line").format(pw=acc["twofa"]) if acc["twofa"] else ""
         kb = KB([[B(t("fa","logout_btn"), cb=f"logout_after_code:{aid}")]])
@@ -615,21 +650,16 @@ async def cb_getcode(cb: CallbackQuery):
     else:
         await cb.message.answer(t("fa","get_code_fail"))
 
-# ═════ خروج از اکانت (بعد از دریافت کد) ═════
 @router.callback_query(F.data.startswith("logout_after_code:"))
 async def cb_logout_after_code(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
     if not acc or acc["sold_to"] != cb.from_user.id:
         return await cb.answer("⛔", show_alert=True)
-    
-    # 🟢 متوقف کردن listener
     await stop_listener(aid)
     await db.clear_session(aid)
     await db.clear_codes(aid)
-    
     await cb.answer(t("fa","logout_success"), show_alert=True)
-    
     try:
         await cb.message.edit_reply_markup(reply_markup=None)
     except: pass
@@ -648,10 +678,8 @@ async def msg_charge_amount(m: Message, state: FSMContext):
         if amount < 1000: raise ValueError
     except:
         return await m.answer(t("fa","invalid"))
-    
     await state.update_data(charge_amount=amount)
     await state.set_state(S.charge_receipt)
-    
     await m.answer(t("fa","charge_card").format(amount=amount, card=CARD_NUMBER, holder=CARD_HOLDER))
 
 @router.message(S.charge_receipt, F.photo)
@@ -659,13 +687,10 @@ async def msg_charge_receipt(m: Message, state: FSMContext):
     data = await state.get_data()
     amount = data.get("charge_amount")
     await state.clear()
-    
     await m.answer(t("fa","charge_receipt_sent"))
-    
     username = f"@{m.from_user.username}" if m.from_user.username else "ندارد"
     txt = t("fa","charge_new_admin").format(uid=m.from_user.id, username=username, amount=amount)
     kb = KB([[B("✅ تایید شارژ", cb=f"apcharge:{m.from_user.id}:{amount}")]])
-    
     try:
         await m.bot.send_photo(OWNER_ID, m.photo[-1].file_id, caption=txt, reply_markup=kb)
     except Exception as e:
@@ -677,18 +702,14 @@ async def cb_apcharge(cb: CallbackQuery):
         return await cb.answer("⛔", show_alert=True)
     _, uid_s, amt_s = cb.data.split(":")
     uid, amount = int(uid_s), int(amt_s)
-    
     await db.add_balance(uid, amount)
     u = await db.get_user(uid)
-    
     try:
         await cb.bot.send_message(uid, t("fa","charge_approved_user").format(amount=amount, balance=u["balance"]))
     except: pass
-    
     await cb.message.edit_caption(caption=(cb.message.caption or "") + "\n\n✅ تایید شد")
     await cb.answer("✅")
 
-# ═════ افزایش موجودی توسط مالک ═════
 @router.callback_query(F.data == "inc_balance")
 async def cb_inc_balance(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id != OWNER_ID: return await cb.answer("⛔")
@@ -710,18 +731,14 @@ async def msg_inc_amount(m: Message, state: FSMContext):
     except: return await m.answer(t("fa","invalid"))
     data = await state.get_data()
     uid = data.get("inc_uid")
-    
     await db.add_balance(uid, amount)
     u = await db.get_user(uid)
-    
     try:
         await m.bot.send_message(uid, t("fa","charge_approved_user").format(amount=amount, balance=u["balance"]))
     except: pass
-    
     await state.clear()
     await m.answer(t("fa","inc_balance_ok"), reply_markup=await main_menu_kb(m.from_user.id))
 
-# ═════ پنل ادمین: افزودن پنل ═════
 @router.callback_query(F.data == "panel_add")
 async def cb_panel_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
@@ -758,14 +775,12 @@ async def msg_p_flag(m: Message, state: FSMContext):
     await state.clear()
     await m.answer(t("fa","add_panel_ok"), reply_markup=await main_menu_kb(m.from_user.id))
 
-# ═════ پنل ادمین: حذف دستی پنل (فقط مالک) ═════
 @router.callback_query(F.data == "panel_del")
 async def cb_panel_del(cb: CallbackQuery):
     if cb.from_user.id != OWNER_ID: return await cb.answer("⛔", show_alert=True)
     panels = await db.all_panels()
     if not panels:
         return await cb.answer(t("fa","del_panel_empty"), show_alert=True)
-    
     rows = [[B(f"{p['flag']} {p['name']}", cb=f"delpanel:{p['id']}")] for p in panels]
     rows.append([B(t("fa","btn_back"), cb="home")])
     await cb.message.edit_text(t("fa","del_panel_choose"), reply_markup=KB(rows))
@@ -780,7 +795,6 @@ async def cb_delpanel(cb: CallbackQuery):
     await cb.message.edit_text(t("fa","welcome").format(name=cb.from_user.first_name or "User"),
                                reply_markup=await main_menu_kb(cb.from_user.id))
 
-# ═════ پنل ادمین: افزودن شماره ═════
 @router.callback_query(F.data == "acc_add")
 async def cb_acc_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
@@ -843,12 +857,17 @@ async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
     client = pending["client"]
     session_str = client.session.save()
     aid = await db.add_account(data["panel_id"], pending["phone"], session_str, twofa)
-    
-    # 🟢 listener رو با همون client موجود راه‌اندازی کن
     try:
         if await client.is_user_authorized():
             async def on_new_message(event):
                 try:
+                    sender = await event.get_sender()
+                    sender_id = event.sender_id
+                    sender_phone = getattr(sender, "phone", None) if sender else None
+                    sender_username = getattr(sender, "username", None) if sender else None
+                    log.info(f"[listener] msg for acc {aid} from id={sender_id} phone={sender_phone} user={sender_username} text={(event.raw_text or '')[:60]!r}")
+                    if not _is_official_sender(sender_id, sender_phone, sender_username):
+                        return
                     txt = event.raw_text or ""
                     match = re.search(r'\b(\d{5,6})\b', txt)
                     if match:
@@ -856,11 +875,9 @@ async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
                         log.info(f"[listener] ✅ code {match.group(1)} saved for acc {aid}")
                 except Exception as e:
                     log.warning(f"[listener] handler error: {e}")
-            
-            client.add_event_handler(on_new_message, events.NewMessage(chats=[777000, 42777, 7770000]))
+            client.add_event_handler(on_new_message, events.NewMessage())
             LISTENERS[aid] = client
             log.info(f"[listener] started for new acc {aid}")
-            
             async def keep_alive(c=client, a=aid):
                 try:
                     await c.run_until_disconnected()
@@ -868,13 +885,11 @@ async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
                     log.warning(f"[listener] acc {a} disconnected: {e}")
                 finally:
                     LISTENERS.pop(a, None)
-            
             asyncio.create_task(keep_alive())
     except Exception as e:
         log.warning(f"[listener] start failed for new acc: {e}")
         try: await client.disconnect()
         except: pass
-    
     globals().pop(f"pending_{m.from_user.id}", None)
     await state.clear()
     await m.answer(t("fa","add_acc_ok"), reply_markup=await main_menu_kb(m.from_user.id))
@@ -887,7 +902,6 @@ async def cmd_setphoto(m: Message, state: FSMContext):
     panels = await db.all_panels()
     if not panels:
         return await m.answer("❌ هیچ پنلی وجود ندارد.")
-    
     await state.set_state(S.setphoto_panel)
     rows = [[B(f"{p['flag']} {p['name']}", cb=f"setphoto_panel:{p['id']}")] for p in panels]
     rows.append([B(t("fa","btn_back"), cb="home")])
@@ -910,11 +924,9 @@ async def msg_setphoto_photo(m: Message, state: FSMContext):
     pid = data.get("setphoto_pid")
     if not pid:
         return await m.answer("❌ خطا. دوباره /setphoto را بزنید.")
-    
     file_id = m.photo[-1].file_id
     await db.set_panel_photo(pid, file_id)
     await state.clear()
-    
     p = await db.get_panel(pid)
     await m.answer(f"✅ عکس برای پنل <b>{p['name']}</b> ثبت شد.")
 
@@ -922,10 +934,7 @@ async def msg_setphoto_photo(m: Message, state: FSMContext):
 async def main():
     if not BOT_TOKEN: raise SystemExit("BOT_TOKEN missing")
     await db.init()
-    
-    # 🟢 راه‌اندازی listener برای همه اکانت‌های موجود
     await start_all_listeners()
-    
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
