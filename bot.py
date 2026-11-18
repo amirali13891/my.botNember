@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Listener + Fallback + 42777 + Set Photo)
+Virtual Number Sales Bot — Final (Robust Code Retrieval + Masked Report + Set Photo)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -15,7 +15,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
-from telethon import TelegramClient, events
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 
@@ -43,8 +43,6 @@ CARD_HOLDER = "هوشیار"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 log = logging.getLogger("vbot")
 router = Router()
-
-LISTENERS: dict = {}
 
 # ════════════════ I18N ════════════════
 T = {
@@ -89,7 +87,7 @@ T = {
         "add_acc_phone": "📱 شماره را با فرمت بین‌المللی ارسال کنید (مثلاً +989121234567):",
         "add_acc_code": "📨 کد ارسال شده را وارد کنید:",
         "add_acc_2fa": "🔐 رمز دو مرحله‌ای را وارد کنید:",
-        "add_acc_ok": "✅ اکانت با موفقیت اضافه شد و listener فعال شد!",
+        "add_acc_ok": "✅ اکانت با موفقیت اضافه شد!",
         "add_acc_err": "❌ خطا در افزودن اکانت:\n<code>{err}</code>",
         "inc_balance_prompt": "👤 آیدی عددی کاربری که می‌خواهید موجودیش را افزایش دهید را وارد کنید:",
         "inc_balance_amount": "💰 مبلغی که می‌خواهید به موجودی این کاربر اضافه کنید را وارد کنید:",
@@ -100,10 +98,10 @@ T = {
         "logout_btn": "🚪 خروج از اکانت",
         "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nنشست ربات از اکانت شما قطع شد.",
         "report_text": ("✅ <b>گزارش خرید موفق</b>\n\n"
-                        "▫️ شناسه خریدار: <code>{uid}</code>\n"
+                        "▫️ شناسه خریدار: <code>{uid_masked}</code>\n"
                         "▫️ کشور: {flag}\n"
                         "▫️ پنل: <b>{panel}</b>\n"
-                        "🔸 شماره خریداری شده: <code>{phone}</code>\n"
+                        "🔸 شماره خریداری شده: <code>{phone_masked}</code>\n"
                         "▫️ مبلغ پرداخت شده: <b>{amount:,}</b> تومان\n"
                         "▫️ تاریخ خرید: <code>{date}</code>\n\n"
                         "📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید."),
@@ -125,6 +123,25 @@ T = {
 
 def t(lang: str, key: str) -> str:
     return T.get(lang, T["fa"]).get(key, key)
+
+def mask_phone(phone: str) -> str:
+    """سه رقم اول شماره را با *** جایگزین می‌کند"""
+    if not phone:
+        return phone
+    s = str(phone)
+    # اگر با + شروع شده، + رو نگه دار
+    prefix = "+" if s.startswith("+") else ""
+    digits = s.lstrip("+")
+    if len(digits) <= 3:
+        return prefix + "***"
+    return prefix + "***" + digits[3:]
+
+def mask_uid(uid) -> str:
+    """سه رقم آخر شناسه را با *** جایگزین می‌کند"""
+    s = str(uid)
+    if len(s) <= 3:
+        return "***"
+    return s[:-3] + "***"
 
 # ════════════════ DB ════════════════
 class DB:
@@ -148,12 +165,6 @@ class DB:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, panel_id INTEGER NOT NULL,
                 phone TEXT, session TEXT, twofa TEXT, status TEXT DEFAULT 'available',
                 sold_to INTEGER, created_at TEXT
-            );
-            CREATE TABLE IF NOT EXISTS codes(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id INTEGER NOT NULL,
-                code TEXT NOT NULL,
-                received_at TEXT
             );
             """)
             try:
@@ -222,12 +233,11 @@ class DB:
             row = await cur.fetchone()
             return dict(row) if row else None
 
-    async def add_account(self, pid, phone, session, twofa="") -> int:
+    async def add_account(self, pid, phone, session, twofa=""):
         async with aiosqlite.connect(self.path) as db:
-            cur = await db.execute("INSERT INTO accounts(panel_id, phone, session, twofa, status, created_at) VALUES(?,?,?,?,'available',?)",
+            await db.execute("INSERT INTO accounts(panel_id, phone, session, twofa, status, created_at) VALUES(?,?,?,?,'available',?)",
                 (pid, phone, session, twofa, datetime.now(timezone.utc).isoformat()))
             await db.commit()
-            return cur.lastrowid
 
     async def get_available_account(self, panel_id) -> Optional[dict]:
         async with aiosqlite.connect(self.path) as db:
@@ -265,31 +275,6 @@ class DB:
             cur = await db.execute("SELECT COUNT(*) FROM accounts WHERE panel_id=? AND status='available'", (pid,))
             row = await cur.fetchone()
             return row[0] == 0
-
-    async def save_code(self, aid, code):
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("INSERT INTO codes(account_id, code, received_at) VALUES(?,?,?)",
-                             (aid, code, datetime.now(timezone.utc).isoformat()))
-            await db.commit()
-
-    async def get_latest_code(self, aid) -> Optional[str]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            cur = await db.execute(
-                "SELECT code FROM codes WHERE account_id=? ORDER BY id DESC LIMIT 1", (aid,))
-            row = await cur.fetchone()
-            return row["code"] if row else None
-
-    async def clear_codes(self, aid):
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("DELETE FROM codes WHERE account_id=?", (aid,))
-            await db.commit()
-
-    async def all_available_sessions(self) -> list[dict]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            cur = await db.execute("SELECT * FROM accounts WHERE session IS NOT NULL")
-            return [dict(r) for r in await cur.fetchall()]
 
 db = DB(DB_PATH)
 
@@ -352,76 +337,6 @@ async def panels_kb(category):
     rows = [[B(f"{p['flag']} {p['name']} — {p['price']:,} تومان", cb=f"panel:{p['id']}")] for p in panels]
     rows.append([B(t("fa","btn_back"), cb="stock")])
     return KB(rows)
-
-# ════════════════ LISTENER MANAGEMENT ════════════════
-def _is_official_sender(sender_id, sender_phone, sender_username):
-    if sender_id in (777000, 42777, 7770000):
-        return True
-    if sender_phone and str(sender_phone).lstrip("+") in ("42777", "777000", "7770000"):
-        return True
-    if sender_username and sender_username.lower() in ("telegram",):
-        return True
-    return False
-
-async def start_listener(aid: int, session_str: str):
-    if aid in LISTENERS:
-        return
-    try:
-        client = TelegramClient(StringSession(session_str), TG_API_ID, TG_API_HASH)
-        await client.connect()
-        if not await client.is_user_authorized():
-            log.warning(f"[listener] acc {aid} not authorized")
-            await client.disconnect()
-            return
-
-        async def on_new_message(event):
-            try:
-                sender = await event.get_sender()
-                sender_id = event.sender_id
-                sender_phone = getattr(sender, "phone", None) if sender else None
-                sender_username = getattr(sender, "username", None) if sender else None
-                log.info(f"[listener] msg for acc {aid} from id={sender_id} phone={sender_phone} user={sender_username} text={(event.raw_text or '')[:60]!r}")
-                if not _is_official_sender(sender_id, sender_phone, sender_username):
-                    return
-                txt = event.raw_text or ""
-                match = re.search(r'\b(\d{5,6})\b', txt)
-                if match:
-                    await db.save_code(aid, match.group(1))
-                    log.info(f"[listener] ✅ code {match.group(1)} saved for acc {aid}")
-            except Exception as e:
-                log.warning(f"[listener] handler error: {e}")
-
-        client.add_event_handler(on_new_message, events.NewMessage())
-        LISTENERS[aid] = client
-        log.info(f"[listener] started for acc {aid}")
-
-        async def keep_alive():
-            try:
-                await client.run_until_disconnected()
-            except Exception as e:
-                log.warning(f"[listener] acc {aid} disconnected: {e}")
-            finally:
-                LISTENERS.pop(aid, None)
-
-        asyncio.create_task(keep_alive())
-    except Exception as e:
-        log.warning(f"[listener] failed to start for acc {aid}: {e}")
-
-async def stop_listener(aid: int):
-    client = LISTENERS.pop(aid, None)
-    if client:
-        try:
-            await client.disconnect()
-            log.info(f"[listener] stopped for acc {aid}")
-        except Exception:
-            pass
-
-async def start_all_listeners():
-    accounts = await db.all_available_sessions()
-    log.info(f"[startup] starting listeners for {len(accounts)} accounts...")
-    for acc in accounts:
-        if acc.get("session"):
-            await start_listener(acc["id"], acc["session"])
 
 # ════════════════ HANDLERS ════════════════
 @router.message(CommandStart())
@@ -517,8 +432,9 @@ async def cb_panel(cb: CallbackQuery):
             ch_id = REPORT_CHANNEL_LINK.split("/")[-1]
             ch_id = f"@{ch_id}" if not ch_id.startswith("-") else ch_id
             rep_txt = t("fa","report_text").format(
-                uid=cb.from_user.id, flag=p["flag"], panel=p["name"],
-                phone=acc["phone"], amount=p["price"],
+                uid_masked=mask_uid(cb.from_user.id),
+                flag=p["flag"], panel=p["name"],
+                phone_masked=mask_phone(acc["phone"]), amount=p["price"],
                 date=datetime.now().strftime("%Y-%m-%d %H:%M")
             )
             me = await cb.bot.get_me()
@@ -533,116 +449,140 @@ async def cb_panel(cb: CallbackQuery):
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد — listener + fallback کامل ═════
+# ═══════════════════════════════════════════════════
+# 🔑 دریافت کد — بازنویسی کامل و قطعی
+# ═══════════════════════════════════════════════════
+async def fetch_login_code(session_str: str, phone: str) -> Optional[str]:
+    """
+    تلاش برای دریافت کد ورود از تلگرام.
+    روش: مستقیم به اکانت‌های رسمی پیام می‌فرستیم و با iter_messages صبر می‌کنیم.
+    """
+    client = None
+    code = None
+    try:
+        client = TelegramClient(StringSession(session_str), TG_API_ID, TG_API_HASH)
+        await client.connect()
+        
+        if not await client.is_user_authorized():
+            log.warning(f"[fetch_code] {phone}: session not authorized")
+            await client.disconnect()
+            return None
+        
+        # sync کامل
+        await client.get_me()
+        try:
+            await client.get_dialogs(limit=50)
+        except Exception as e:
+            log.warning(f"[fetch_code] get_dialogs: {e}")
+        
+        # اکانت‌های رسمی تلگرام که کد ازشون میاد
+        official_ids = [777000, 42777, 7770000]
+        
+        # ─── مرحله ۱: چک پیام‌های موجود ───
+        for oid in official_ids:
+            if code: break
+            try:
+                try:
+                    await client.get_entity(oid)
+                except Exception:
+                    pass
+                msgs = await client.get_messages(oid, limit=20)
+                for msg in msgs:
+                    if not msg or not msg.text:
+                        continue
+                    match = re.search(r'\b(\d{5,6})\b', msg.text)
+                    if match:
+                        code = match.group(1)
+                        log.info(f"[fetch_code] {phone}: found in existing msgs of {oid}: {code}")
+                        break
+            except Exception as e:
+                log.warning(f"[fetch_code] {phone}: get_messages({oid}) failed: {e}")
+        
+        # ─── مرحله ۲: اگه پیدا نشد، با iter_messages منتظر پیام جدید بمون ───
+        if not code:
+            log.info(f"[fetch_code] {phone}: waiting for new messages...")
+            for oid in official_ids:
+                if code: break
+                try:
+                    # wait_time=5 یعنی تا ۵ ثانیه منتظر پیام جدید می‌مونه
+                    async for msg in client.iter_messages(oid, limit=3, wait_time=5):
+                        if not msg or not msg.text:
+                            continue
+                        match = re.search(r'\b(\d{5,6})\b', msg.text)
+                        if match:
+                            code = match.group(1)
+                            log.info(f"[fetch_code] {phone}: found via iter {oid}: {code}")
+                            break
+                except Exception as e:
+                    log.warning(f"[fetch_code] {phone}: iter_messages({oid}) failed: {e}")
+        
+        # ─── مرحله ۳: جستجو در همه دیالوگ‌ها (آخرین راه) ───
+        if not code:
+            try:
+                dialogs = await client.get_dialogs(limit=30)
+                for dialog in dialogs:
+                    if code: break
+                    try:
+                        dname = (dialog.name or "").lower()
+                        # فقط دیالوگ‌های مرتبط با تلگرام
+                        if not any(k in dname for k in ["telegram", "تلگرام"]) and \
+                           dialog.id not in official_ids:
+                            continue
+                        msgs = await client.get_messages(dialog.entity, limit=10)
+                        for msg in msgs:
+                            if not msg or not msg.text:
+                                continue
+                            match = re.search(r'\b(\d{5,6})\b', msg.text)
+                            if match:
+                                code = match.group(1)
+                                log.info(f"[fetch_code] {phone}: found in dialog {dialog.name}: {code}")
+                                break
+                    except Exception:
+                        continue
+            except Exception as e:
+                log.warning(f"[fetch_code] {phone}: dialog scan failed: {e}")
+        
+        # ذخیره session جدید
+        try:
+            new_session = client.session.save()
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("UPDATE accounts SET session=? WHERE phone=?", (new_session, phone))
+                await db.commit()
+        except Exception as e:
+            log.warning(f"[fetch_code] {phone}: save session failed: {e}")
+        
+        await client.disconnect()
+        client = None
+        return code
+    except Exception as e:
+        log.exception(f"[fetch_code] {phone}: fatal: {e}")
+        if client:
+            try: await client.disconnect()
+            except: pass
+        return None
+
+
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
     if not acc or acc["sold_to"] != cb.from_user.id:
         return await cb.answer("⛔", show_alert=True)
+    if not acc.get("session"):
+        return await cb.answer(t("fa","get_code_fail"), show_alert=True)
+    
     await cb.answer(t("fa","get_code_wait"))
-
+    
+    # ۳ بار تلاش با فاصله
     code = None
-    # مرحله ۱: از listener
-    for _ in range(10):
-        code = await db.get_latest_code(aid)
+    for attempt in range(3):
+        log.info(f"[getcode] {acc['phone']}: attempt {attempt+1}/3")
+        code = await fetch_login_code(acc["session"], acc["phone"])
         if code:
             break
-        await asyncio.sleep(3)
-
-    # مرحله ۲: fallback مستقیم
-    if not code and acc.get("session"):
-        log.info(f"[getcode] fallback for acc {aid}")
-        client = None
-        try:
-            client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
-            await client.connect()
-            if await client.is_user_authorized():
-                await client.get_me()
-                try:
-                    await client.get_dialogs(limit=50)
-                except Exception:
-                    pass
-
-                OFFICIAL_TARGETS = [(777000, None), (42777, "+42777"), (7770000, None)]
-
-                for attempt in range(3):
-                    for official_id, official_phone in OFFICIAL_TARGETS:
-                        if code: break
-                        try:
-                            try:
-                                await client.get_entity(official_id)
-                            except Exception:
-                                pass
-                            msgs = await client.get_messages(official_id, limit=20)
-                            for msg in msgs:
-                                if not msg or not msg.text:
-                                    continue
-                                match = re.search(r'\b(\d{5,6})\b', msg.text)
-                                if match:
-                                    code = match.group(1)
-                                    log.info(f"[getcode] found via id {official_id}: {code}")
-                                    break
-                        except Exception as e:
-                            log.warning(f"[getcode] id {official_id} failed: {e}")
-
-                        if code: break
-
-                        if official_phone:
-                            try:
-                                entity = await client.get_entity(official_phone)
-                                msgs = await client.get_messages(entity, limit=20)
-                                for msg in msgs:
-                                    if not msg or not msg.text:
-                                        continue
-                                    match = re.search(r'\b(\d{5,6})\b', msg.text)
-                                    if match:
-                                        code = match.group(1)
-                                        log.info(f"[getcode] found via phone {official_phone}: {code}")
-                                        break
-                            except Exception as e:
-                                log.warning(f"[getcode] phone {official_phone} failed: {e}")
-
-                    if code:
-                        break
-                    await asyncio.sleep(2)
-
-                # جستجو در همه دیالوگ‌ها
-                if not code:
-                    try:
-                        dialogs = await client.get_dialogs(limit=30)
-                        for dialog in dialogs:
-                            if code: break
-                            try:
-                                dname = (dialog.name or "").lower()
-                                if "telegram" not in dname and dialog.id not in (777000, 42777, 7770000):
-                                    continue
-                                msgs = await client.get_messages(dialog.entity, limit=10)
-                                for msg in msgs:
-                                    if not msg or not msg.text:
-                                        continue
-                                    match = re.search(r'\b(\d{5,6})\b', msg.text)
-                                    if match:
-                                        code = match.group(1)
-                                        log.info(f"[getcode] found in dialog {dialog.name}: {code}")
-                                        break
-                            except Exception:
-                                continue
-                    except Exception as e:
-                        log.warning(f"[getcode] dialog scan failed: {e}")
-
-                new_session = client.session.save()
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute("UPDATE accounts SET session=? WHERE id=?", (new_session, aid))
-                    await db.commit()
-            await client.disconnect()
-            client = None
-        except Exception as e:
-            log.warning(f"[getcode] fallback failed: {e}")
-            if client:
-                try: await client.disconnect()
-                except: pass
-
+        if attempt < 2:
+            await asyncio.sleep(4)
+    
     if code:
         extra = t("fa","twofa_line").format(pw=acc["twofa"]) if acc["twofa"] else ""
         kb = KB([[B(t("fa","logout_btn"), cb=f"logout_after_code:{aid}")]])
@@ -650,15 +590,15 @@ async def cb_getcode(cb: CallbackQuery):
     else:
         await cb.message.answer(t("fa","get_code_fail"))
 
+
+# ═════ خروج از اکانت ═════
 @router.callback_query(F.data.startswith("logout_after_code:"))
 async def cb_logout_after_code(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
     if not acc or acc["sold_to"] != cb.from_user.id:
         return await cb.answer("⛔", show_alert=True)
-    await stop_listener(aid)
     await db.clear_session(aid)
-    await db.clear_codes(aid)
     await cb.answer(t("fa","logout_success"), show_alert=True)
     try:
         await cb.message.edit_reply_markup(reply_markup=None)
@@ -854,42 +794,10 @@ async def msg_acc_2fa(m: Message, state: FSMContext):
 
 async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
     data = await state.get_data()
-    client = pending["client"]
-    session_str = client.session.save()
-    aid = await db.add_account(data["panel_id"], pending["phone"], session_str, twofa)
-    try:
-        if await client.is_user_authorized():
-            async def on_new_message(event):
-                try:
-                    sender = await event.get_sender()
-                    sender_id = event.sender_id
-                    sender_phone = getattr(sender, "phone", None) if sender else None
-                    sender_username = getattr(sender, "username", None) if sender else None
-                    log.info(f"[listener] msg for acc {aid} from id={sender_id} phone={sender_phone} user={sender_username} text={(event.raw_text or '')[:60]!r}")
-                    if not _is_official_sender(sender_id, sender_phone, sender_username):
-                        return
-                    txt = event.raw_text or ""
-                    match = re.search(r'\b(\d{5,6})\b', txt)
-                    if match:
-                        await db.save_code(aid, match.group(1))
-                        log.info(f"[listener] ✅ code {match.group(1)} saved for acc {aid}")
-                except Exception as e:
-                    log.warning(f"[listener] handler error: {e}")
-            client.add_event_handler(on_new_message, events.NewMessage())
-            LISTENERS[aid] = client
-            log.info(f"[listener] started for new acc {aid}")
-            async def keep_alive(c=client, a=aid):
-                try:
-                    await c.run_until_disconnected()
-                except Exception as e:
-                    log.warning(f"[listener] acc {a} disconnected: {e}")
-                finally:
-                    LISTENERS.pop(a, None)
-            asyncio.create_task(keep_alive())
-    except Exception as e:
-        log.warning(f"[listener] start failed for new acc: {e}")
-        try: await client.disconnect()
-        except: pass
+    session_str = pending["client"].session.save()
+    await db.add_account(data["panel_id"], pending["phone"], session_str, twofa)
+    try: await pending["client"].disconnect()
+    except: pass
     globals().pop(f"pending_{m.from_user.id}", None)
     await state.clear()
     await m.answer(t("fa","add_acc_ok"), reply_markup=await main_menu_kb(m.from_user.id))
@@ -934,7 +842,6 @@ async def msg_setphoto_photo(m: Message, state: FSMContext):
 async def main():
     if not BOT_TOKEN: raise SystemExit("BOT_TOKEN missing")
     await db.init()
-    await start_all_listeners()
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
