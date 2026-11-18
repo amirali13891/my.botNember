@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Robust Code Retrieval + Masked Report + Set Photo)
+Virtual Number Sales Bot — Final (Simple Code Retrieval + Set Photo + Masked Report)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -63,9 +63,10 @@ T = {
         "buy_success": "🎉 خرید موفق!\n\n📱 شماره: <code>{phone}</code>\n🔐 رمز دو مرحله‌ای: <code>{twofa}</code>\n\nبرای دریافت کد ورود، دکمه «دریافت کد» را بزنید.",
         "get_code_btn": "🔑 دریافت کد",
         "get_code_wait": "⏳ در حال دریافت کد از تلگرام...",
-        "get_code_ok": "🔑 کد ورود شما: <code>{code}</code>{twofa}\n\n👇 برای خروج ربات از این اکانت روی دکمه زیر بزنید:",
+        "get_code_ok": "🔑 کد ورود شما: <code>{code}</code>{twofa}",
         "get_code_fail": "⚠️ کدی یافت نشد. ابتدا در اپ تلگرام شماره را وارد کنید تا کد ارسال شود، سپس دوباره تلاش کنید.",
         "twofa_line": "\n🔐 رمز دو مرحله‌ای: <code>{pw}</code>",
+        
         "charge_amount": "💰 لطفاً مبلغ مورد نظر (به تومان) را فقط به صورت عدد وارد کنید (بدون کاما و نقطه):",
         "charge_card": ("💳 <b>درخواست شارژ حساب</b>\n\n"
                         "مبلغ قابل پرداخت (کلیک کنید تا کپی شود):\n<code>{amount}</code> تومان\n\n"
@@ -78,25 +79,24 @@ T = {
         "charge_receipt_sent": "✅ رسید شما برای بررسی به مالک ارسال شد.\nلطفاً منتظر تایید بمانید.",
         "charge_new_admin": "💳 <b>درخواست شارژ جدید</b>\n\nآیدی کاربر: <code>{uid}</code>\nیوزرنیم: {username}\nمبلغ: <b>{amount:,}</b> تومان",
         "charge_approved_user": "🎉 حساب شما با موفقیت شارژ شد!\n\nمبلغ: <b>{amount:,}</b> تومان\n💰 موجودی فعلی شما: <b>{balance:,}</b> تومان\n\nممنون از صبوری شما 🌹",
+        
         "add_panel_name": "🏷 نام پنل را وارد کنید:",
         "add_panel_price": "💰 قیمت (تومان) را وارد کنید:",
         "add_panel_cat": "📂 دسته‌بندی را انتخاب کنید:",
         "add_panel_flag": "🌍 فلگ کشور را وارد کنید (مثلاً 🇺🇸):",
         "add_panel_ok": "✅ پنل ایجاد شد.",
+        
         "add_acc_choose_panel": "➕ <b>افزودن شماره</b>\nیک پنل انتخاب کنید:",
         "add_acc_phone": "📱 شماره را با فرمت بین‌المللی ارسال کنید (مثلاً +989121234567):",
         "add_acc_code": "📨 کد ارسال شده را وارد کنید:",
         "add_acc_2fa": "🔐 رمز دو مرحله‌ای را وارد کنید:",
         "add_acc_ok": "✅ اکانت با موفقیت اضافه شد!",
         "add_acc_err": "❌ خطا در افزودن اکانت:\n<code>{err}</code>",
+        
         "inc_balance_prompt": "👤 آیدی عددی کاربری که می‌خواهید موجودیش را افزایش دهید را وارد کنید:",
         "inc_balance_amount": "💰 مبلغی که می‌خواهید به موجودی این کاربر اضافه کنید را وارد کنید:",
         "inc_balance_ok": "✅ موجودی کاربر با موفقیت افزایش یافت.",
-        "del_panel_choose": "🗑 <b>حذف پنل</b>\nکدام پنل را می‌خواهید حذف کنید؟ (توجه: تمام شماره‌های داخل آن نیز پاک می‌شوند)",
-        "del_panel_ok": "✅ پنل و تمام شماره‌های آن با موفقیت حذف شد.",
-        "del_panel_empty": "❌ هیچ پنلی برای حذف وجود ندارد.",
-        "logout_btn": "🚪 خروج از اکانت",
-        "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nنشست ربات از اکانت شما قطع شد.",
+        
         "report_text": ("✅ <b>گزارش خرید موفق</b>\n\n"
                         "▫️ شناسه خریدار: <code>{uid_masked}</code>\n"
                         "▫️ کشور: {flag}\n"
@@ -106,14 +106,15 @@ T = {
                         "▫️ تاریخ خرید: <code>{date}</code>\n\n"
                         "📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید."),
         "buy_from_channel": "🛒 ربات شماره مجازی",
+        
         "btn_profile": "👤 حساب کاربری", "btn_support": "🎧 پشتیبانی",
         "btn_buy": "🛒 خرید شماره", "btn_guide": "📚 توضیحات",
         "btn_stock": "📦 لیست موجودی", "btn_charge": "💳 شارژ حساب",
         "btn_main_channel": "🏪 چنل اصلی", "btn_report_channel": "📣 چنل گزارشات",
         "btn_add_account": "➕ افزودن شماره", "btn_add_panel": "📦 افزودن پنل",
-        "btn_del_panel": "🗑 حذف پنل",
         "btn_inc_balance": "💰 افزایش موجودی",
         "btn_back": "◀️ بازگشت", "btn_home": "🏠 منوی اصلی",
+        
         "guide_msg": "📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:",
         "open_channel": "🔗 ورود به کانال",
         "invalid": "❌ مقدار نامعتبر.",
@@ -125,11 +126,9 @@ def t(lang: str, key: str) -> str:
     return T.get(lang, T["fa"]).get(key, key)
 
 def mask_phone(phone: str) -> str:
-    """سه رقم اول شماره را با *** جایگزین می‌کند"""
     if not phone:
         return phone
     s = str(phone)
-    # اگر با + شروع شده، + رو نگه دار
     prefix = "+" if s.startswith("+") else ""
     digits = s.lstrip("+")
     if len(digits) <= 3:
@@ -137,7 +136,6 @@ def mask_phone(phone: str) -> str:
     return prefix + "***" + digits[3:]
 
 def mask_uid(uid) -> str:
-    """سه رقم آخر شناسه را با *** جایگزین می‌کند"""
     s = str(uid)
     if len(s) <= 3:
         return "***"
@@ -219,7 +217,7 @@ class DB:
             db.row_factory = aiosqlite.Row
             cur = await db.execute("SELECT * FROM panels WHERE category=? ORDER BY id DESC", (category,))
             return [dict(r) for r in await cur.fetchall()]
-
+            
     async def all_panels(self) -> list[dict]:
         async with aiosqlite.connect(self.path) as db:
             db.row_factory = aiosqlite.Row
@@ -259,23 +257,6 @@ class DB:
             row = await cur.fetchone()
             return dict(row) if row else None
 
-    async def clear_session(self, aid):
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("UPDATE accounts SET session=NULL WHERE id=?", (aid,))
-            await db.commit()
-
-    async def delete_panel(self, pid):
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("DELETE FROM panels WHERE id=?", (pid,))
-            await db.execute("DELETE FROM accounts WHERE panel_id=?", (pid,))
-            await db.commit()
-
-    async def check_panel_empty(self, pid) -> bool:
-        async with aiosqlite.connect(self.path) as db:
-            cur = await db.execute("SELECT COUNT(*) FROM accounts WHERE panel_id=? AND status='available'", (pid,))
-            row = await cur.fetchone()
-            return row[0] == 0
-
 db = DB(DB_PATH)
 
 # ════════════════ BUTTONS ════════════════
@@ -311,11 +292,12 @@ async def main_menu_kb(uid: int):
         row_ch.append(B(t("fa","btn_report_channel"), url=REPORT_CHANNEL_LINK))
     if row_ch:
         rows.append(row_ch)
+        
     rows.append([B(t("fa","btn_guide"), cb="guide")])
+    
     if is_admin:
         rows.append([B(t("fa","btn_add_account"), cb="acc_add"), B(t("fa","btn_add_panel"), cb="panel_add")])
         if uid == OWNER_ID:
-            rows.append([B(t("fa","btn_del_panel"), cb="panel_del")])
             rows.append([B(t("fa","btn_inc_balance"), cb="inc_balance")])
     return KB(rows)
 
@@ -382,6 +364,7 @@ async def cb_guide(cb: CallbackQuery):
     await cb.message.edit_text(t("fa","guide_msg"), reply_markup=KB(rows))
     await cb.answer()
 
+# ═════ لیست موجودی و خرید ═════
 @router.callback_query(F.data == "stock")
 async def cb_stock(cb: CallbackQuery):
     await cb.message.edit_text(t("fa","buy_title"), reply_markup=categories_kb("scat"))
@@ -419,14 +402,18 @@ async def cb_panel(cb: CallbackQuery):
     pid = int(cb.data.split(":",1)[1])
     p = await db.get_panel(pid)
     if not p: return await cb.answer("پنل یافت نشد.", show_alert=True)
+    
     acc = await db.get_available_account(pid)
     if not acc:
         return await cb.answer(t("fa","no_accounts"), show_alert=True)
+        
     u = await db.get_user(cb.from_user.id)
     if u["balance"] < p["price"]:
         return await cb.answer(t("fa","balance_low").format(bal=u["balance"], need=p["price"]), show_alert=True)
+        
     await db.deduct_balance(cb.from_user.id, p["price"])
     await db.sell_account(acc["id"], cb.from_user.id)
+    
     if REPORT_CHANNEL_LINK:
         try:
             ch_id = REPORT_CHANNEL_LINK.split("/")[-1]
@@ -442,126 +429,13 @@ async def cb_panel(cb: CallbackQuery):
             await cb.bot.send_message(ch_id, rep_txt, reply_markup=KB([[btn]]))
         except Exception as e:
             log.warning(f"Could not send report to channel: {e}")
-    if await db.check_panel_empty(pid):
-        await db.delete_panel(pid)
+
     txt = t("fa","buy_success").format(phone=acc["phone"], twofa=acc["twofa"] or "ندارد")
     kb = KB([[B(t("fa","get_code_btn"), cb=f"getcode:{acc['id']}")], [B(t("fa","btn_home"), cb="home")]])
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═══════════════════════════════════════════════════
-# 🔑 دریافت کد — بازنویسی کامل و قطعی
-# ═══════════════════════════════════════════════════
-async def fetch_login_code(session_str: str, phone: str) -> Optional[str]:
-    """
-    تلاش برای دریافت کد ورود از تلگرام.
-    روش: مستقیم به اکانت‌های رسمی پیام می‌فرستیم و با iter_messages صبر می‌کنیم.
-    """
-    client = None
-    code = None
-    try:
-        client = TelegramClient(StringSession(session_str), TG_API_ID, TG_API_HASH)
-        await client.connect()
-        
-        if not await client.is_user_authorized():
-            log.warning(f"[fetch_code] {phone}: session not authorized")
-            await client.disconnect()
-            return None
-        
-        # sync کامل
-        await client.get_me()
-        try:
-            await client.get_dialogs(limit=50)
-        except Exception as e:
-            log.warning(f"[fetch_code] get_dialogs: {e}")
-        
-        # اکانت‌های رسمی تلگرام که کد ازشون میاد
-        official_ids = [777000, 42777, 7770000]
-        
-        # ─── مرحله ۱: چک پیام‌های موجود ───
-        for oid in official_ids:
-            if code: break
-            try:
-                try:
-                    await client.get_entity(oid)
-                except Exception:
-                    pass
-                msgs = await client.get_messages(oid, limit=20)
-                for msg in msgs:
-                    if not msg or not msg.text:
-                        continue
-                    match = re.search(r'\b(\d{5,6})\b', msg.text)
-                    if match:
-                        code = match.group(1)
-                        log.info(f"[fetch_code] {phone}: found in existing msgs of {oid}: {code}")
-                        break
-            except Exception as e:
-                log.warning(f"[fetch_code] {phone}: get_messages({oid}) failed: {e}")
-        
-        # ─── مرحله ۲: اگه پیدا نشد، با iter_messages منتظر پیام جدید بمون ───
-        if not code:
-            log.info(f"[fetch_code] {phone}: waiting for new messages...")
-            for oid in official_ids:
-                if code: break
-                try:
-                    # wait_time=5 یعنی تا ۵ ثانیه منتظر پیام جدید می‌مونه
-                    async for msg in client.iter_messages(oid, limit=3, wait_time=5):
-                        if not msg or not msg.text:
-                            continue
-                        match = re.search(r'\b(\d{5,6})\b', msg.text)
-                        if match:
-                            code = match.group(1)
-                            log.info(f"[fetch_code] {phone}: found via iter {oid}: {code}")
-                            break
-                except Exception as e:
-                    log.warning(f"[fetch_code] {phone}: iter_messages({oid}) failed: {e}")
-        
-        # ─── مرحله ۳: جستجو در همه دیالوگ‌ها (آخرین راه) ───
-        if not code:
-            try:
-                dialogs = await client.get_dialogs(limit=30)
-                for dialog in dialogs:
-                    if code: break
-                    try:
-                        dname = (dialog.name or "").lower()
-                        # فقط دیالوگ‌های مرتبط با تلگرام
-                        if not any(k in dname for k in ["telegram", "تلگرام"]) and \
-                           dialog.id not in official_ids:
-                            continue
-                        msgs = await client.get_messages(dialog.entity, limit=10)
-                        for msg in msgs:
-                            if not msg or not msg.text:
-                                continue
-                            match = re.search(r'\b(\d{5,6})\b', msg.text)
-                            if match:
-                                code = match.group(1)
-                                log.info(f"[fetch_code] {phone}: found in dialog {dialog.name}: {code}")
-                                break
-                    except Exception:
-                        continue
-            except Exception as e:
-                log.warning(f"[fetch_code] {phone}: dialog scan failed: {e}")
-        
-        # ذخیره session جدید
-        try:
-            new_session = client.session.save()
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("UPDATE accounts SET session=? WHERE phone=?", (new_session, phone))
-                await db.commit()
-        except Exception as e:
-            log.warning(f"[fetch_code] {phone}: save session failed: {e}")
-        
-        await client.disconnect()
-        client = None
-        return code
-    except Exception as e:
-        log.exception(f"[fetch_code] {phone}: fatal: {e}")
-        if client:
-            try: await client.disconnect()
-            except: pass
-        return None
-
-
+# ═════ دریافت کد — دقیقاً مثل namber2.py ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
@@ -570,39 +444,25 @@ async def cb_getcode(cb: CallbackQuery):
         return await cb.answer("⛔", show_alert=True)
     if not acc.get("session"):
         return await cb.answer(t("fa","get_code_fail"), show_alert=True)
-    
     await cb.answer(t("fa","get_code_wait"))
-    
-    # ۳ بار تلاش با فاصله
-    code = None
-    for attempt in range(3):
-        log.info(f"[getcode] {acc['phone']}: attempt {attempt+1}/3")
-        code = await fetch_login_code(acc["session"], acc["phone"])
-        if code:
-            break
-        if attempt < 2:
-            await asyncio.sleep(4)
-    
-    if code:
-        extra = t("fa","twofa_line").format(pw=acc["twofa"]) if acc["twofa"] else ""
-        kb = KB([[B(t("fa","logout_btn"), cb=f"logout_after_code:{aid}")]])
-        await cb.message.answer(t("fa","get_code_ok").format(code=code, twofa=extra), reply_markup=kb)
-    else:
-        await cb.message.answer(t("fa","get_code_fail"))
-
-
-# ═════ خروج از اکانت ═════
-@router.callback_query(F.data.startswith("logout_after_code:"))
-async def cb_logout_after_code(cb: CallbackQuery):
-    aid = int(cb.data.split(":",1)[1])
-    acc = await db.get_account(aid)
-    if not acc or acc["sold_to"] != cb.from_user.id:
-        return await cb.answer("⛔", show_alert=True)
-    await db.clear_session(aid)
-    await cb.answer(t("fa","logout_success"), show_alert=True)
     try:
-        await cb.message.edit_reply_markup(reply_markup=None)
-    except: pass
+        client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
+        await client.connect()
+        code = None
+        for m in await client.get_messages(777000, limit=15):
+            if m.text:
+                match = re.search(r"\b(\d{5,6})\b", m.text)
+                if match:
+                    code = match.group(1); break
+        await client.disconnect()
+        if code:
+            extra = t("fa","twofa_line").format(pw=acc["twofa"]) if acc["twofa"] else ""
+            await cb.message.answer(t("fa","get_code_ok").format(code=code, twofa=extra))
+        else:
+            await cb.message.answer(t("fa","get_code_fail"))
+    except Exception as e:
+        log.exception(f"getcode: {e}")
+        await cb.message.answer(t("fa","get_code_fail"))
 
 # ═════ شارژ حساب ═════
 @router.callback_query(F.data == "charge")
@@ -618,8 +478,10 @@ async def msg_charge_amount(m: Message, state: FSMContext):
         if amount < 1000: raise ValueError
     except:
         return await m.answer(t("fa","invalid"))
+    
     await state.update_data(charge_amount=amount)
     await state.set_state(S.charge_receipt)
+    
     await m.answer(t("fa","charge_card").format(amount=amount, card=CARD_NUMBER, holder=CARD_HOLDER))
 
 @router.message(S.charge_receipt, F.photo)
@@ -627,10 +489,13 @@ async def msg_charge_receipt(m: Message, state: FSMContext):
     data = await state.get_data()
     amount = data.get("charge_amount")
     await state.clear()
+    
     await m.answer(t("fa","charge_receipt_sent"))
+    
     username = f"@{m.from_user.username}" if m.from_user.username else "ندارد"
     txt = t("fa","charge_new_admin").format(uid=m.from_user.id, username=username, amount=amount)
     kb = KB([[B("✅ تایید شارژ", cb=f"apcharge:{m.from_user.id}:{amount}")]])
+    
     try:
         await m.bot.send_photo(OWNER_ID, m.photo[-1].file_id, caption=txt, reply_markup=kb)
     except Exception as e:
@@ -642,14 +507,18 @@ async def cb_apcharge(cb: CallbackQuery):
         return await cb.answer("⛔", show_alert=True)
     _, uid_s, amt_s = cb.data.split(":")
     uid, amount = int(uid_s), int(amt_s)
+    
     await db.add_balance(uid, amount)
     u = await db.get_user(uid)
+    
     try:
         await cb.bot.send_message(uid, t("fa","charge_approved_user").format(amount=amount, balance=u["balance"]))
     except: pass
+    
     await cb.message.edit_caption(caption=(cb.message.caption or "") + "\n\n✅ تایید شد")
     await cb.answer("✅")
 
+# ═════ افزایش موجودی توسط مالک ═════
 @router.callback_query(F.data == "inc_balance")
 async def cb_inc_balance(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id != OWNER_ID: return await cb.answer("⛔")
@@ -671,14 +540,18 @@ async def msg_inc_amount(m: Message, state: FSMContext):
     except: return await m.answer(t("fa","invalid"))
     data = await state.get_data()
     uid = data.get("inc_uid")
+    
     await db.add_balance(uid, amount)
     u = await db.get_user(uid)
+    
     try:
         await m.bot.send_message(uid, t("fa","charge_approved_user").format(amount=amount, balance=u["balance"]))
     except: pass
+    
     await state.clear()
     await m.answer(t("fa","inc_balance_ok"), reply_markup=await main_menu_kb(m.from_user.id))
 
+# ═════ پنل ادمین: افزودن پنل ═════
 @router.callback_query(F.data == "panel_add")
 async def cb_panel_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
@@ -715,26 +588,7 @@ async def msg_p_flag(m: Message, state: FSMContext):
     await state.clear()
     await m.answer(t("fa","add_panel_ok"), reply_markup=await main_menu_kb(m.from_user.id))
 
-@router.callback_query(F.data == "panel_del")
-async def cb_panel_del(cb: CallbackQuery):
-    if cb.from_user.id != OWNER_ID: return await cb.answer("⛔", show_alert=True)
-    panels = await db.all_panels()
-    if not panels:
-        return await cb.answer(t("fa","del_panel_empty"), show_alert=True)
-    rows = [[B(f"{p['flag']} {p['name']}", cb=f"delpanel:{p['id']}")] for p in panels]
-    rows.append([B(t("fa","btn_back"), cb="home")])
-    await cb.message.edit_text(t("fa","del_panel_choose"), reply_markup=KB(rows))
-    await cb.answer()
-
-@router.callback_query(F.data.startswith("delpanel:"))
-async def cb_delpanel(cb: CallbackQuery):
-    if cb.from_user.id != OWNER_ID: return await cb.answer("⛔", show_alert=True)
-    pid = int(cb.data.split(":",1)[1])
-    await db.delete_panel(pid)
-    await cb.answer(t("fa","del_panel_ok"), show_alert=True)
-    await cb.message.edit_text(t("fa","welcome").format(name=cb.from_user.first_name or "User"),
-                               reply_markup=await main_menu_kb(cb.from_user.id))
-
+# ═════ پنل ادمین: افزودن شماره ═════
 @router.callback_query(F.data == "acc_add")
 async def cb_acc_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
