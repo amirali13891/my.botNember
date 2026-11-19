@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Main Menu Photo + Fixed Logout + Code Retrieval)
+Virtual Number Sales Bot — Final (Fixed Logout + Working Code Retrieval + Set Photo)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -13,7 +13,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -67,7 +67,7 @@ T = {
         "get_code_fail": "⚠️ کدی یافت نشد. ابتدا در اپ تلگرام شماره را وارد کنید تا کد ارسال شود، سپس دوباره تلاش کنید.",
         "twofa_line": "\n🔐 رمز دو مرحله‌ای: <code>{pw}</code>",
         "logout_btn": "🚪 خروج ربات",
-        "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nاکنون می‌توانید در اپلیکیشن تلگرام خودتان شماره را وارد کنید و کد را دریافت کنید.",
+        "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nنشست ربات از اکانت شما قطع شد.",
         
         "charge_amount": "💰 لطفاً مبلغ مورد نظر (به تومان) را فقط به صورت عدد وارد کنید (بدون کاما و نقطه):",
         "charge_card": ("💳 <b>درخواست شارژ حساب</b>\n\n"
@@ -174,26 +174,11 @@ class DB:
                 phone TEXT, session TEXT, twofa TEXT, status TEXT DEFAULT 'available',
                 sold_to INTEGER, created_at TEXT
             );
-            CREATE TABLE IF NOT EXISTS settings(
-                key TEXT PRIMARY KEY, value TEXT
-            );
             """)
             try:
                 await db.execute("ALTER TABLE panels ADD COLUMN photo TEXT")
             except Exception:
                 pass
-            await db.commit()
-
-    async def get_setting(self, key: str) -> Optional[str]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            cur = await db.execute("SELECT value FROM settings WHERE key=?", (key,))
-            row = await cur.fetchone()
-            return row["value"] if row else None
-
-    async def set_setting(self, key: str, value: str):
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)", (key, value))
             await db.commit()
 
     async def get_user(self, uid: int) -> dict:
@@ -231,6 +216,11 @@ class DB:
                 (name, price, category, flag, datetime.now(timezone.utc).isoformat()))
             await db.commit()
             return cur.lastrowid
+
+    async def set_panel_photo(self, pid, photo):
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("UPDATE panels SET photo=? WHERE id=?", (photo, pid))
+            await db.commit()
 
     async def panels_by_cat(self, category) -> list[dict]:
         async with aiosqlite.connect(self.path) as db:
@@ -285,6 +275,7 @@ class DB:
     async def delete_panel(self, pid):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM panels WHERE id=?", (pid,))
+            # فقط اکانت‌های موجود پاک میشن، اکانت‌های فروخته شده برای کدگیری می‌مونن
             await db.execute("DELETE FROM accounts WHERE panel_id=? AND status='available'", (pid,))
             await db.commit()
 
@@ -358,66 +349,43 @@ async def cmd_start(m: Message, state: FSMContext):
     await state.clear()
     await db.get_user(m.from_user.id)
     text = t("fa","welcome").format(name=m.from_user.first_name or "User")
-    photo_id = await db.get_setting("menu_photo")
-    
-    kb = await main_menu_kb(m.from_user.id)
-    if photo_id:
-        try:
-            await m.answer_photo(photo=photo_id, caption=text, reply_markup=kb)
-            return
-        except Exception:
-            pass
-    await m.answer(text, reply_markup=kb)
+    await m.answer(text, reply_markup=await main_menu_kb(m.from_user.id))
 
 @router.callback_query(F.data == "home")
 async def cb_home(cb: CallbackQuery, state: FSMContext):
     await state.clear()
-    text = t("fa","welcome").format(name=cb.from_user.first_name or "User")
-    photo_id = await db.get_setting("menu_photo")
-    kb = await main_menu_kb(cb.from_user.id)
-    
     try:
-        if photo_id:
-            try:
-                # اگر پیام فعلی عکس است، فقط کپشن و کیبورد را عوض میکنیم
-                if cb.message.photo:
-                    await cb.message.edit_caption(caption=text, reply_markup=kb)
-                    await cb.answer()
-                    return
-            except Exception:
-                pass
-            
-            # اگر عکس بود ولی پیام متنی بود، پیام را پاک و عکس جدید میفرستیم
-            await cb.message.delete()
-            await cb.message.answer_photo(photo=photo_id, caption=text, reply_markup=kb)
-        else:
-            if cb.message.photo:
-                await cb.message.delete()
-                await cb.message.answer(text, reply_markup=kb)
-            else:
-                await cb.message.edit_text(text, reply_markup=kb)
+        await cb.message.edit_text(t("fa","welcome").format(name=cb.from_user.first_name or "User"),
+                                   reply_markup=await main_menu_kb(cb.from_user.id))
     except Exception:
         pass
     await cb.answer()
 
-# ═════ دستور /setphoto برای منوی اصلی ═════
-@router.message(Command("setphoto"))
-async def cmd_setphoto(m: Message, state: FSMContext):
-    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
-        return await m.answer("⛔ دسترسی ندارید.")
-    
-    await state.set_state(S.setphoto_panel)
-    await m.answer("🖼 <b>لطفاً عکس مورد نظر برای منوی اصلی ربات را ارسال کنید</b>\n\n(به صورت photo ارسال کنید، نه فایل)")
+@router.callback_query(F.data == "profile")
+async def cb_profile(cb: CallbackQuery):
+    u = await db.get_user(cb.from_user.id)
+    txt = t("fa","profile_title") + "\n\n" + t("fa","profile_body").format(
+        uid=u["user_id"], balance=u["balance"], time=datetime.now().strftime("%H:%M"),
+        purchases=u["purchases"], charged=u["total_charged"])
+    await cb.message.edit_text(txt, reply_markup=back_kb())
+    await cb.answer()
 
-@router.message(S.setphoto_panel, F.photo)
-async def msg_setphoto_photo(m: Message, state: FSMContext):
-    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
-        return
-    
-    file_id = m.photo[-1].file_id
-    await db.set_setting("menu_photo", file_id)
-    await state.clear()
-    await m.answer("✅ عکس منوی اصلی ربات با موفقیت ثبت شد.")
+@router.callback_query(F.data == "support")
+async def cb_support(cb: CallbackQuery):
+    owner_disp = f"{OWNER_USERNAME} (ID: {OWNER_ID})"
+    admin_disp = f"{ADMIN_USERNAME} (ID: {ADMIN_ID})"
+    txt = t("fa","support").format(owner=owner_disp, admin=admin_disp)
+    await cb.message.edit_text(txt, reply_markup=back_kb())
+    await cb.answer()
+
+@router.callback_query(F.data == "guide")
+async def cb_guide(cb: CallbackQuery):
+    rows = []
+    if GUIDE_CHANNEL_LINK:
+        rows.append([B(t("fa","open_channel"), url=GUIDE_CHANNEL_LINK)])
+    rows.append([B(t("fa","btn_back"), cb="home")])
+    await cb.message.edit_text(t("fa","guide_msg"), reply_markup=KB(rows))
+    await cb.answer()
 
 # ═════ لیست موجودی و خرید ═════
 @router.callback_query(F.data == "stock")
@@ -490,7 +458,7 @@ async def cb_panel(cb: CallbackQuery):
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد ═════
+# ═════ دریافت کد — بدون تغییر و بدون باگ ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
@@ -548,18 +516,23 @@ async def cb_logout(cb: CallbackQuery):
         try:
             client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
             await client.connect()
+            
             if await client.is_user_authorized():
+                # این خط ربات رو به طور واقعی از اکانت خارج میکنه
                 await client.log_out() 
+                
             await client.disconnect()
             log.info(f"User {cb.from_user.id} successfully logged out from acc {aid}")
         except Exception as e:
-            log.warning(f"logout from TG failed: {e}")
+            log.warning(f"logout from TG failed (maybe already logged out): {e}")
             
+    # پاک کردن سشن از دیتابیس برای اینکه دیگه کد نگیره
     await db.clear_session(aid)
     
+    # پیام موفقیت
     try:
         await cb.message.edit_text(
-            t("fa","logout_success"),
+            "✅ با موفقیت از اکانت خارج شدید.\nاکنون می‌توانید در اپلیکیشن تلگرام خودتان شماره را وارد کنید و کد را دریافت کنید.",
             reply_markup=None
         )
     except:
@@ -792,6 +765,42 @@ async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
     globals().pop(f"pending_{m.from_user.id}", None)
     await state.clear()
     await m.answer(t("fa","add_acc_ok"), reply_markup=await main_menu_kb(m.from_user.id))
+
+# ═════ دستور /setphoto ═════
+@router.message(Command("setphoto"))
+async def cmd_setphoto(m: Message, state: FSMContext):
+    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
+        return await m.answer("⛔ دسترسی ندارید.")
+    panels = await db.all_panels()
+    if not panels:
+        return await m.answer("❌ هیچ پنلی وجود ندارد.")
+    await state.set_state(S.setphoto_panel)
+    rows = [[B(f"{p['flag']} {p['name']}", cb=f"setphoto_panel:{p['id']}")] for p in panels]
+    rows.append([B(t("fa","btn_back"), cb="home")])
+    await m.answer("🖼 <b>انتخاب پنل برای گذاشتن عکس</b>\n\nیک پنل انتخاب کنید:", reply_markup=KB(rows))
+
+@router.callback_query(S.setphoto_panel, F.data.startswith("setphoto_panel:"))
+async def cb_setphoto_panel(cb: CallbackQuery, state: FSMContext):
+    if cb.from_user.id not in (OWNER_ID, ADMIN_ID):
+        return await cb.answer("⛔", show_alert=True)
+    pid = int(cb.data.split(":",1)[1])
+    await state.update_data(setphoto_pid=pid)
+    await cb.message.edit_text("🖼 <b>لطفاً عکس پنل را ارسال کنید</b>\n\n(به صورت photo ارسال کنید، نه فایل)")
+    await cb.answer()
+
+@router.message(S.setphoto_panel, F.photo)
+async def msg_setphoto_photo(m: Message, state: FSMContext):
+    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
+        return
+    data = await state.get_data()
+    pid = data.get("setphoto_pid")
+    if not pid:
+        return await m.answer("❌ خطا. دوباره /setphoto را بزنید.")
+    file_id = m.photo[-1].file_id
+    await db.set_panel_photo(pid, file_id)
+    await state.clear()
+    p = await db.get_panel(pid)
+    await m.answer(f"✅ عکس برای پنل <b>{p['name']}</b> ثبت شد.")
 
 # ═════ STARTUP ═════
 async def main():
