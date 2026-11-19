@@ -468,16 +468,28 @@ async def cb_panel(cb: CallbackQuery):
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد — دست‌نخورده (کار می‌کند) ═════
+# ═════ دریافت کد — نسخه ضد باگ با لاگ دقیق ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
-    if not acc or acc["sold_to"] != cb.from_user.id:
-        return await cb.answer("⛔", show_alert=True)
+    
+    # 🟢 چک میکنیم اگه اکانت پیدا نشد خطا بده
+    if not acc:
+        log.warning(f"[getcode] Account {aid} not found in DB!")
+        return await cb.answer("⛔ اکانت یافت نشد (با پشتیبانی تماس بگیرید)", show_alert=True)
+        
+    # 🟢 ملایم کردن شرط
+    if acc["sold_to"] and acc["sold_to"] != cb.from_user.id:
+        log.warning(f"[getcode] User {cb.from_user.id} tried to get code for acc {aid} owned by {acc['sold_to']}")
+        return await cb.answer("⛔ این اکانت متعلق به شما نیست.", show_alert=True)
+        
+    # 🟢 اگه session نداشت
     if not acc.get("session"):
-        return await cb.answer(t("fa","get_code_fail"), show_alert=True)
+        return await cb.answer("⚠️ نشست این اکانت منقضی شده است.", show_alert=True)
+        
     await cb.answer(t("fa","get_code_wait"))
+    
     try:
         client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
         await client.connect()
@@ -488,9 +500,9 @@ async def cb_getcode(cb: CallbackQuery):
                 if match:
                     code = match.group(1); break
         await client.disconnect()
+        
         if code:
             extra = t("fa","twofa_line").format(pw=acc["twofa"]) if acc["twofa"] else ""
-            # 🔑 دکمه خروج ربات زیر پیام کد
             kb = KB([[B(t("fa","logout_btn"), cb=f"logout:{aid}")]])
             await cb.message.answer(
                 t("fa","get_code_ok").format(code=code, twofa=extra),
@@ -512,7 +524,6 @@ async def cb_logout(cb: CallbackQuery):
     
     await cb.answer(t("fa","logout_success"), show_alert=True)
     
-    # سعی کن session رو واقعاً ببندی (اگه ممکنه)
     if acc.get("session"):
         try:
             client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
