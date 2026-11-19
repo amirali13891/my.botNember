@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Code Retrieval + Set Photo + Delete Panel + Logout)
+Virtual Number Sales Bot — Final (Manual Delete Only + Fixed Code Retrieval + Set Photo)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -275,14 +275,9 @@ class DB:
     async def delete_panel(self, pid):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM panels WHERE id=?", (pid,))
-            await db.execute("DELETE FROM accounts WHERE panel_id=?", (pid,))
+            # 🟢 فقط اکانت‌های موجود پاک میشن، اکانت‌های فروخته شده برای کدگیری می‌مونن
+            await db.execute("DELETE FROM accounts WHERE panel_id=? AND status='available'", (pid,))
             await db.commit()
-
-    async def check_panel_empty(self, pid) -> bool:
-        async with aiosqlite.connect(self.path) as db:
-            cur = await db.execute("SELECT COUNT(*) FROM accounts WHERE panel_id=? AND status='available'", (pid,))
-            row = await cur.fetchone()
-            return row[0] == 0
 
 db = DB(DB_PATH)
 
@@ -458,33 +453,27 @@ async def cb_panel(cb: CallbackQuery):
         except Exception as e:
             log.warning(f"Could not send report to channel: {e}")
 
-    # 🔑 حذف خودکار پنل اگه دیگه شماره‌ای نداره
-    if await db.check_panel_empty(pid):
-        await db.delete_panel(pid)
-        log.info(f"[auto-delete] panel {pid} deleted (no accounts left)")
+    # ❌ حذف خودکار پنل برداشته شد (پنل در لیست می‌ماند ولی بدون موجودی)
 
     txt = t("fa","buy_success").format(phone=acc["phone"], twofa=acc["twofa"] or "ندارد")
     kb = KB([[B(t("fa","get_code_btn"), cb=f"getcode:{acc['id']}")], [B(t("fa","btn_home"), cb="home")]])
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد — نسخه ضد باگ با لاگ دقیق ═════
+# ═════ دریافت کد ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
     acc = await db.get_account(aid)
     
-    # 🟢 چک میکنیم اگه اکانت پیدا نشد خطا بده
     if not acc:
         log.warning(f"[getcode] Account {aid} not found in DB!")
         return await cb.answer("⛔ اکانت یافت نشد (با پشتیبانی تماس بگیرید)", show_alert=True)
         
-    # 🟢 ملایم کردن شرط
     if acc["sold_to"] and acc["sold_to"] != cb.from_user.id:
         log.warning(f"[getcode] User {cb.from_user.id} tried to get code for acc {aid} owned by {acc['sold_to']}")
         return await cb.answer("⛔ این اکانت متعلق به شما نیست.", show_alert=True)
         
-    # 🟢 اگه session نداشت
     if not acc.get("session"):
         return await cb.answer("⚠️ نشست این اکانت منقضی شده است.", show_alert=True)
         
