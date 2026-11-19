@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Virtual Number Sales Bot — Final (Fixed Logout + Working Code Retrieval + Set Photo)
+Virtual Number Sales Bot — Final (Force Join 2 Channels + Fixed Logout + Code Retrieval)
 """
 import asyncio, logging, os, re
 from datetime import datetime, timezone
@@ -37,6 +37,10 @@ REPORT_CHANNEL_LINK = os.getenv("REPORT_CHANNEL_LINK", "").strip()
 GUIDE_CHANNEL_LINK = os.getenv("GUIDE_CHANNEL_LINK", "").strip()
 DB_PATH = os.getenv("DB_PATH", "bot.db")
 
+# 🔒 کانال‌های جوین اجباری
+FORCE_JOIN_1 = "@Group_SHOP_KhaN"
+FORCE_JOIN_2 = "@SHOP_Number_KhaN"
+
 CARD_NUMBER = "6219861885186253"
 CARD_HOLDER = "هوشیار"
 
@@ -48,6 +52,8 @@ router = Router()
 T = {
     "fa": {
         "welcome": "👋 سلام <b>{name}</b>!\nبه ربات فروش شماره مجازی خوش آمدید.\nاز منوی زیر انتخاب کنید:",
+        "force_join_msg": "⚠️ <b>کاربر گرامی</b>\nبرای استفاده از ربات، لطفاً ابتدا در کانال‌های زیر عضو شوید:\n\nسپس دکمه «✅ عضو شدم» را بزنید.",
+        "force_join_fail": "❌ شما هنوز در تمام کانال‌ها عضو نشده‌اید!\nلطفاً ابتدا عضو شوید و سپس دوباره تلاش کنید.",
         "profile_title": "👤 <b>حساب کاربری</b>",
         "profile_body": ("🆔 شناسه عددی: <code>{uid}</code>\n"
                          "💰 موجودی: <b>{balance:,}</b> تومان\n"
@@ -67,7 +73,7 @@ T = {
         "get_code_fail": "⚠️ کدی یافت نشد. ابتدا در اپ تلگرام شماره را وارد کنید تا کد ارسال شود، سپس دوباره تلاش کنید.",
         "twofa_line": "\n🔐 رمز دو مرحله‌ای: <code>{pw}</code>",
         "logout_btn": "🚪 خروج ربات",
-        "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nنشست ربات از اکانت شما قطع شد.",
+        "logout_success": "✅ با موفقیت از اکانت خارج شدید.\nاکنون می‌توانید در اپلیکیشن تلگرام خودتان شماره را وارد کنید و کد را دریافت کنید.",
         
         "charge_amount": "💰 لطفاً مبلغ مورد نظر (به تومان) را فقط به صورت عدد وارد کنید (بدون کاما و نقطه):",
         "charge_card": ("💳 <b>درخواست شارژ حساب</b>\n\n"
@@ -124,6 +130,8 @@ T = {
         "btn_del_panel": "🗑 حذف پنل",
         "btn_inc_balance": "💰 افزایش موجودی",
         "btn_back": "◀️ بازگشت", "btn_home": "🏠 منوی اصلی",
+        "join_check": "✅ عضو شدم",
+        "join_alert": "❌ شما هنوز در تمام کانال‌ها عضو نشده‌اید!\nلطفاً ابتدا عضو شوید و سپس دوباره تلاش کنید.",
         
         "guide_msg": "📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:",
         "open_channel": "🔗 ورود به کانال",
@@ -275,7 +283,6 @@ class DB:
     async def delete_panel(self, pid):
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM panels WHERE id=?", (pid,))
-            # فقط اکانت‌های موجود پاک میشن، اکانت‌های فروخته شده برای کدگیری می‌مونن
             await db.execute("DELETE FROM accounts WHERE panel_id=? AND status='available'", (pid,))
             await db.commit()
 
@@ -297,7 +304,24 @@ class S(StatesGroup):
     p_name = State(); p_price = State(); p_cat = State(); p_flag = State()
     charge_amount = State(); charge_receipt = State()
     inc_uid = State(); inc_amount = State()
-    setphoto_panel = State()
+
+# ════════════════ JOIN CHECK ════════════════
+async def check_join(user_id: int) -> bool:
+    try:
+        m1 = await bot.get_chat_member(chat_id=FORCE_JOIN_1, user_id=user_id)
+        m2 = await bot.get_chat_member(chat_id=FORCE_JOIN_2, user_id=user_id)
+        return m1.status in ["member", "administrator", "creator"] and m2.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        log.warning(f"check_join failed: {e}")
+        return False
+
+async def send_join_prompt(msg: Message):
+    kb = KB([
+        [B("📢 کانال شاپ", url=f"https://t.me/{FORCE_JOIN_1.lstrip('@')}")],
+        [B("📢 کانال شماره", url=f"https://t.me/{FORCE_JOIN_2.lstrip('@')}")],
+        [B(t("fa","join_check"), cb="check_join_status")]
+    ])
+    await msg.answer(t("fa","force_join_msg"), reply_markup=kb)
 
 # ════════════════ KEYBOARDS ════════════════
 async def main_menu_kb(uid: int):
@@ -347,9 +371,23 @@ async def panels_kb(category):
 @router.message(CommandStart())
 async def cmd_start(m: Message, state: FSMContext):
     await state.clear()
+    
+    if not await check_join(m.from_user.id):
+        return await send_join_prompt(m)
+        
     await db.get_user(m.from_user.id)
     text = t("fa","welcome").format(name=m.from_user.first_name or "User")
     await m.answer(text, reply_markup=await main_menu_kb(m.from_user.id))
+
+@router.callback_query(F.data == "check_join_status")
+async def cb_check_join_status(cb: CallbackQuery, state: FSMContext):
+    if await check_join(cb.from_user.id):
+        await cb.message.delete()
+        await db.get_user(cb.from_user.id)
+        text = t("fa","welcome").format(name=cb.from_user.first_name or "User")
+        await cb.message.answer(text, reply_markup=await main_menu_kb(cb.from_user.id))
+    else:
+        await cb.answer(t("fa","join_alert"), show_alert=True)
 
 @router.callback_query(F.data == "home")
 async def cb_home(cb: CallbackQuery, state: FSMContext):
@@ -458,7 +496,7 @@ async def cb_panel(cb: CallbackQuery):
     await cb.message.edit_text(txt, reply_markup=kb)
     await cb.answer("✅ خرید موفقیت‌آمیز بود.")
 
-# ═════ دریافت کد — بدون تغییر و بدون باگ ═════
+# ═════ دریافت کد ═════
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":",1)[1])
@@ -516,23 +554,18 @@ async def cb_logout(cb: CallbackQuery):
         try:
             client = TelegramClient(StringSession(acc["session"]), TG_API_ID, TG_API_HASH)
             await client.connect()
-            
             if await client.is_user_authorized():
-                # این خط ربات رو به طور واقعی از اکانت خارج میکنه
                 await client.log_out() 
-                
             await client.disconnect()
             log.info(f"User {cb.from_user.id} successfully logged out from acc {aid}")
         except Exception as e:
-            log.warning(f"logout from TG failed (maybe already logged out): {e}")
+            log.warning(f"logout from TG failed: {e}")
             
-    # پاک کردن سشن از دیتابیس برای اینکه دیگه کد نگیره
     await db.clear_session(aid)
     
-    # پیام موفقیت
     try:
         await cb.message.edit_text(
-            "✅ با موفقیت از اکانت خارج شدید.\nاکنون می‌توانید در اپلیکیشن تلگرام خودتان شماره را وارد کنید و کد را دریافت کنید.",
+            t("fa","logout_success"),
             reply_markup=None
         )
     except:
@@ -766,47 +799,10 @@ async def _save_acc(m: Message, state: FSMContext, pending: dict, twofa: str):
     await state.clear()
     await m.answer(t("fa","add_acc_ok"), reply_markup=await main_menu_kb(m.from_user.id))
 
-# ═════ دستور /setphoto ═════
-@router.message(Command("setphoto"))
-async def cmd_setphoto(m: Message, state: FSMContext):
-    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
-        return await m.answer("⛔ دسترسی ندارید.")
-    panels = await db.all_panels()
-    if not panels:
-        return await m.answer("❌ هیچ پنلی وجود ندارد.")
-    await state.set_state(S.setphoto_panel)
-    rows = [[B(f"{p['flag']} {p['name']}", cb=f"setphoto_panel:{p['id']}")] for p in panels]
-    rows.append([B(t("fa","btn_back"), cb="home")])
-    await m.answer("🖼 <b>انتخاب پنل برای گذاشتن عکس</b>\n\nیک پنل انتخاب کنید:", reply_markup=KB(rows))
-
-@router.callback_query(S.setphoto_panel, F.data.startswith("setphoto_panel:"))
-async def cb_setphoto_panel(cb: CallbackQuery, state: FSMContext):
-    if cb.from_user.id not in (OWNER_ID, ADMIN_ID):
-        return await cb.answer("⛔", show_alert=True)
-    pid = int(cb.data.split(":",1)[1])
-    await state.update_data(setphoto_pid=pid)
-    await cb.message.edit_text("🖼 <b>لطفاً عکس پنل را ارسال کنید</b>\n\n(به صورت photo ارسال کنید، نه فایل)")
-    await cb.answer()
-
-@router.message(S.setphoto_panel, F.photo)
-async def msg_setphoto_photo(m: Message, state: FSMContext):
-    if m.from_user.id not in (OWNER_ID, ADMIN_ID):
-        return
-    data = await state.get_data()
-    pid = data.get("setphoto_pid")
-    if not pid:
-        return await m.answer("❌ خطا. دوباره /setphoto را بزنید.")
-    file_id = m.photo[-1].file_id
-    await db.set_panel_photo(pid, file_id)
-    await state.clear()
-    p = await db.get_panel(pid)
-    await m.answer(f"✅ عکس برای پنل <b>{p['name']}</b> ثبت شد.")
-
 # ═════ STARTUP ═════
 async def main():
     if not BOT_TOKEN: raise SystemExit("BOT_TOKEN missing")
     await db.init()
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
     log.info(f"Bot started!")
