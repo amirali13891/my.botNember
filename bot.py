@@ -120,10 +120,13 @@ class DB:
 
 db = DB(DB_PATH)
 
-def B(text, cb=None, url=None):
+def B(text, cb=None, url=None, style=None):
     kw = {"text": text}
     if cb: kw["callback_data"] = cb
     if url: kw["url"] = url
+    if style:
+        try: kw["style"] = style
+        except: pass
     return InlineKeyboardButton(**kw)
 
 def KB(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -145,34 +148,44 @@ async def check_join(uid):
     except: return False
 
 async def join_prompt(m):
-    kb = KB([[B("📢 کانال شاپ", url=f"https://t.me/{FORCE_JOIN_1.lstrip('@')}")], [B("📢 کانال شماره", url=f"https://t.me/{FORCE_JOIN_2.lstrip('@')}")], [B("✅ عضو شدم", cb="check_join")]])
+    kb = KB([[B("📢 کانال شاپ", url=f"https://t.me/{FORCE_JOIN_1.lstrip('@')}", style="primary")], [B("📢 کانال شماره", url=f"https://t.me/{FORCE_JOIN_2.lstrip('@')}", style="primary")], [B("✅ عضو شدم", cb="check_join", style="success")]])
     await m.answer("⚠️ <b>کاربر گرامی</b>\nبرای استفاده از ربات، لطفاً ابتدا در کانال‌های زیر عضو شوید:\n\nسپس دکمه «✅ عضو شدم» را بزنید.", reply_markup=kb)
 
 async def main_kb(uid):
     is_admin = uid in (OWNER_ID, ADMIN_ID)
     rows = [
-        [B("👤 حساب کاربری", "profile"), B("🎧 پشتیبانی", "support")],
-        [B("🛒 خرید شماره", "buy")],
-        [B("📦 لیست موجودی", "stock"), B("💳 شارژ حساب", "charge")],
-        [B("🏪 چنل اصلی", url=MAIN_CHANNEL_LINK), B("📣 چنل گزارشات", url=REPORT_CHANNEL_LINK)],
-        [B("📚 توضیحات", "guide")]
+        [B("🛒 خرید شماره مجازی", "buy", style="primary")],
+        [B("📦 لیست موجودی", "stock", style="success")],
+        [B("💰 افزایش موجودی", "inc_balance", style="success"), B("🛡 احراز هویت", "profile", style="success")] if is_admin else 
+        [B("💳 شارژ حساب", "charge", style="success"), B("📦 لیست موجودی", "stock", style="success")],
+        [B("👤 حساب کاربری", "profile", style="danger"), B("💵 انتقال موجودی", "profile", style="danger")],
+        [B("⚠️ راهنما و قوانین", "guide", style="success"), B("🎧 پشتیبانی", "support", style="success")],
     ]
+    
+    admin_rows = []
     if is_admin:
-        rows.append([B("➕ افزودن شماره", "acc_add"), B("📦 افزودن پنل", "panel_add")])
+        admin_rows.append([B("➕ افزودن شماره", "acc_add", style="primary"), B("📦 افزودن پنل", "panel_add", style="primary")])
         if uid == OWNER_ID:
-            rows.append([B("🗑 حذف پنل", "panel_del")])
-            rows.append([B("💰 افزایش موجودی", "inc_balance")])
-    return KB(rows)
+            admin_rows.append([B("🗑 حذف پنل", "panel_del", style="danger"), B("💰 افزایش موجودی", "inc_balance", style="success")])
+            
+    return KB(rows + admin_rows)
 
-def back_kb(cb="home"): return KB([[B("◀️ بازگشت", cb=cb)]])
+def back_kb(cb="home"): 
+    return KB([[B("◀️ بازگشت", cb=cb, style="primary")]])
 
 def cats_kb(prefix):
-    return KB([[B("🚫 اسکم", f"{prefix}:scam")], [B("🎭 جعلی", f"{prefix}:fake")], [B("✅ نوریپ", f"{prefix}:ready")], [B("♻️ ریپ دایم", f"{prefix}:rep")], [B("◀️ بازگشت", "home")]])
+    return KB([
+        [B("🚫 اسکم", f"{prefix}:scam", style="danger")], 
+        [B("🎭 جعلی", f"{prefix}:fake", style="danger")], 
+        [B("✅ نوریپ", f"{prefix}:ready", style="success")], 
+        [B("♻️ ریپ دایم", f"{prefix}:rep", style="success")], 
+        [B("◀️ بازگشت", "home", style="primary")]
+    ])
 
 async def panels_kb(cat):
     panels = await db.get_panels(cat)
-    rows = [[B(f"{p['flag']} {p['name']} — {p['price']:,} ت", f"panel:{p['id']}")] for p in panels]
-    rows.append([B("◀️ بازگشت", "stock")])
+    rows = [[B(f"{p['flag']} {p['name']} — {p['price']:,} ت", f"panel:{p['id']}", style="primary")] for p in panels]
+    rows.append([B("◀️ بازگشت", "stock", style="primary")])
     return KB(rows)
 
 @router.message(CommandStart())
@@ -212,7 +225,7 @@ async def cb_support(cb: CallbackQuery):
 
 @router.callback_query(F.data == "guide")
 async def cb_guide(cb: CallbackQuery):
-    await cb.message.edit_text("📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:", reply_markup=KB([[B("🔗 ورود به کانال", url=GUIDE_CHANNEL_LINK)], [B("◀️ بازگشت", "home")]]))
+    await cb.message.edit_text("📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:", reply_markup=KB([[B("🔗 ورود به کانال", url=GUIDE_CHANNEL_LINK, style="success")], [B("◀️ بازگشت", "home", style="primary")]]))
     await cb.answer()
 
 @router.callback_query(F.data == "stock")
@@ -243,10 +256,10 @@ async def cb_panel(cb: CallbackQuery):
     await db.sub_bal(cb.from_user.id, p["price"])
     await db.sell_acc(acc["id"], cb.from_user.id)
     try:
-        await bot.send_message(int(REPORT_CHANNEL_ID), f"✅ <b>گزارش خرید موفق</b>\n\n▫️ شناسه: <code>{mask_u(cb.from_user.id)}</code>\n▫️ کشور: {p['flag']}\n▫️ پنل: <b>{p['name']}</b>\n🔸 شماره: <code>{mask_p(acc['phone'])}</code>\n▫️ مبلغ: <b>{p['price']:,}</b> تومان\n▫️ تاریخ: <code>{datetime.now().strftime('%Y-%m-%d %H:%M')}</code>\n\n📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید.", reply_markup=KB([[B("🛒 ربات شماره مجازی", url=f"https://t.me/{(await bot.get_me()).username}")]]))
+        await bot.send_message(int(REPORT_CHANNEL_ID), f"✅ <b>گزارش خرید موفق</b>\n\n▫️ شناسه: <code>{mask_u(cb.from_user.id)}</code>\n▫️ کشور: {p['flag']}\n▫️ پنل: <b>{p['name']}</b>\n🔸 شماره: <code>{mask_p(acc['phone'])}</code>\n▫️ مبلغ: <b>{p['price']:,}</b> تومان\n▫️ تاریخ: <code>{datetime.now().strftime('%Y-%m-%d %H:%M')}</code>\n\n📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید.", reply_markup=KB([[B("🛒 ربات شماره مجازی", url=f"https://t.me/{(await bot.get_me()).username}", style="success")]]))
     except Exception as e: log.warning(f"Report failed: {e}")
     txt = f"🎉 خرید موفق!\n\n📱 شماره: <code>{acc['phone']}</code>\n🔐 رمز دوم: <code>{acc['twofa'] or 'ندارد'}</code>\n\nبرای دریافت کد ورود، دکمه زیر را بزنید."
-    await cb.message.edit_text(txt, reply_markup=KB([[B("🔑 دریافت کد", f"getcode:{acc['id']}")], [B("🏠 منوی اصلی", "home")]]))
+    await cb.message.edit_text(txt, reply_markup=KB([[B("🔑 دریافت کد", f"getcode:{acc['id']}", style="success")], [B("🏠 منوی اصلی", "home", style="primary")]]))
     await cb.answer("✅ خرید موفق!")
 
 @router.callback_query(F.data.startswith("getcode:"))
@@ -267,7 +280,7 @@ async def cb_getcode(cb: CallbackQuery):
         await client.disconnect()
         if code:
             extra = f"\n🔐 رمز دوم: <code>{acc['twofa']}</code>" if acc["twofa"] else ""
-            await cb.message.answer(f"🔑 کد ورود شما: <code>{code}</code>{extra}", reply_markup=KB([[B("🚪 خروج ربات", f"logout:{aid}")]]))
+            await cb.message.answer(f"🔑 کد ورود شما: <code>{code}</code>{extra}", reply_markup=KB([[B("🚪 خروج ربات", f"logout:{aid}", style="danger")]]))
         else: await cb.message.answer("⚠️ کدی یافت نشد. ابتدا در اپ تلگرام شماره را وارد کنید تا کد بیاید.")
     except Exception as e:
         log.exception(e); await cb.message.answer("⚠️ خطا در دریافت کد.")
@@ -312,7 +325,7 @@ async def msg_charge_receipt(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("✅ رسید شما برای بررسی به مالک ارسال شد.")
     txt = f"💳 <b>درخواست شارژ جدید</b>\n\nآیدی: <code>{m.from_user.id}</code>\nیوزرنیم: @{m.from_user.username if m.from_user.username else 'ندارد'}\nمبلغ: <b>{amount:,}</b> تومان"
-    try: await m.bot.send_photo(OWNER_ID, m.photo[-1].file_id, caption=txt, reply_markup=KB([[B("✅ تایید شارژ", f"apcharge:{m.from_user.id}:{amount}")]]))
+    try: await m.bot.send_photo(OWNER_ID, m.photo[-1].file_id, caption=txt, reply_markup=KB([[B("✅ تایید شارژ", f"apcharge:{m.from_user.id}:{amount}", style="success")]]))
     except: pass
 
 @router.callback_query(F.data.startswith("apcharge:"))
@@ -394,8 +407,8 @@ async def cb_panel_del(cb: CallbackQuery):
     if cb.from_user.id != OWNER_ID: return await cb.answer("⛔", show_alert=True)
     panels = await db.all_panels()
     if not panels: return await cb.answer("❌ پنلی وجود ندارد.", show_alert=True)
-    rows = [[B(f"{p['flag']} {p['name']}", f"delp:{p['id']}")] for p in panels]
-    rows.append([B("◀️ بازگشت", "home")])
+    rows = [[B(f"{p['flag']} {p['name']}", f"delp:{p['id']}", style="danger")] for p in panels]
+    rows.append([B("◀️ بازگشت", "home", style="primary")])
     await cb.message.edit_text("🗑 کدام پنل حذف شود؟", reply_markup=KB(rows))
     await cb.answer()
 
@@ -405,7 +418,7 @@ async def cb_delp(cb: CallbackQuery):
     pid = int(cb.data.split(":")[1])
     p = await db.get_panel(pid)
     if not p: return await cb.answer("❌", show_alert=True)
-    await cb.message.edit_text(f"⚠️ حذف پنل <b>{p['name']}</b>؟", reply_markup=KB([[B("✅ بله", f"delyes:{pid}")], [B("❌ انصراف", "home")]]))
+    await cb.message.edit_text(f"⚠️ حذف پنل <b>{p['name']}</b>؟", reply_markup=KB([[B("✅ بله", f"delyes:{pid}", style="success")], [B("❌ انصراف", "home", style="danger")]]))
     await cb.answer()
 
 @router.callback_query(F.data.startswith("delyes:"))
@@ -422,8 +435,8 @@ async def cb_acc_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
     panels = await db.all_panels()
     if not panels: return await cb.answer("❌ پنلی وجود ندارد.", show_alert=True)
-    rows = [[B(f"{p['flag']} {p['name']}", f"accpanel:{p['id']}")] for p in panels]
-    rows.append([B("◀️ بازگشت", "home")])
+    rows = [[B(f"{p['flag']} {p['name']}", f"accpanel:{p['id']}", style="primary")] for p in panels]
+    rows.append([B("◀️ بازگشت", "home", style="primary")])
     await state.set_state(S.acc_panel)
     await cb.message.answer("➕ پنل مورد نظر را انتخاب کنید:", reply_markup=KB(rows))
     await cb.answer()
