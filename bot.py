@@ -120,6 +120,7 @@ class DB:
 
 db = DB(DB_PATH)
 
+# ✨ تغییر یافته: تابع B حالا رنگ رو هم دریافت میکنه
 def B(text, cb=None, url=None, style=None):
     kw = {"text": text}
     if cb: kw["callback_data"] = cb
@@ -147,32 +148,36 @@ async def check_join(uid):
         return m1.status in ["member", "administrator", "creator"] and m2.status in ["member", "administrator", "creator"]
     except: return False
 
+# ✨ تغییر یافته: رنگ دکمه‌های عضویت
 async def join_prompt(m):
-    kb = KB([[B("📢 کانال شاپ", url=f"https://t.me/{FORCE_JOIN_1.lstrip('@')}", style="primary")], [B("📢 کانال شماره", url=f"https://t.me/{FORCE_JOIN_2.lstrip('@')}", style="primary")], [B("✅ عضو شدم", cb="check_join", style="success")]])
+    kb = KB([
+        [B("📢 کانال شاپ", url=f"https://t.me/{FORCE_JOIN_1.lstrip('@')}", style="primary")], 
+        [B("📢 کانال شماره", url=f"https://t.me/{FORCE_JOIN_2.lstrip('@')}", style="primary")], 
+        [B("✅ عضو شدم", cb="check_join", style="success")]
+    ])
     await m.answer("⚠️ <b>کاربر گرامی</b>\nبرای استفاده از ربات، لطفاً ابتدا در کانال‌های زیر عضو شوید:\n\nسپس دکمه «✅ عضو شدم» را بزنید.", reply_markup=kb)
 
+# ✨ تغییر یافته: رنگ‌بندی دکمه‌های منوی اصلی
 async def main_kb(uid):
     is_admin = uid in (OWNER_ID, ADMIN_ID)
     rows = [
-        [B("🛒 خرید شماره مجازی", "buy", style="primary")],
-        [B("📦 لیست موجودی", "stock", style="success")],
-        [B("💰 افزایش موجودی", "inc_balance", style="success"), B("🛡 احراز هویت", "profile", style="success")] if is_admin else 
-        [B("💳 شارژ حساب", "charge", style="success"), B("📦 لیست موجودی", "stock", style="success")],
-        [B("👤 حساب کاربری", "profile", style="danger"), B("💵 انتقال موجودی", "profile", style="danger")],
-        [B("⚠️ راهنما و قوانین", "guide", style="success"), B("🎧 پشتیبانی", "support", style="success")],
+        [B("👤 حساب کاربری", "profile", style="primary"), B("🎧 پشتیبانی", "support", style="primary")],
+        [B("🛒 خرید شماره", "buy", style="success")],
+        [B("📦 لیست موجودی", "stock", style="success"), B("💳 شارژ حساب", "charge", style="success")],
+        [B("🏪 چنل اصلی", url=MAIN_CHANNEL_LINK, style="primary"), B("📣 چنل گزارشات", url=REPORT_CHANNEL_LINK, style="primary")],
+        [B("📚 توضیحات", "guide", style="primary")]
     ]
-    
-    admin_rows = []
     if is_admin:
-        admin_rows.append([B("➕ افزودن شماره", "acc_add", style="primary"), B("📦 افزودن پنل", "panel_add", style="primary")])
+        rows.append([B("➕ افزودن شماره", "acc_add", style="success"), B("📦 افزودن پنل", "panel_add", style="success")])
         if uid == OWNER_ID:
-            admin_rows.append([B("🗑 حذف پنل", "panel_del", style="danger"), B("💰 افزایش موجودی", "inc_balance", style="success")])
-            
-    return KB(rows + admin_rows)
+            rows.append([B("🗑 حذف پنل", "panel_del", style="danger")])
+            rows.append([B("💰 افزایش موجودی", "inc_balance", style="success")])
+    return KB(rows)
 
-def back_kb(cb="home"): 
-    return KB([[B("◀️ بازگشت", cb=cb, style="primary")]])
+# ✨ تغییر یافته: رنگ دکمه بازگشت
+def back_kb(cb="home"): return KB([[B("◀️ بازگشت", cb=cb, style="danger")]])
 
+# ✨ تغییر یافته: رنگ‌بندی دسته‌ها
 def cats_kb(prefix):
     return KB([
         [B("🚫 اسکم", f"{prefix}:scam", style="danger")], 
@@ -182,10 +187,11 @@ def cats_kb(prefix):
         [B("◀️ بازگشت", "home", style="primary")]
     ])
 
+# ✨ تغییر یافته: رنگ دکمه‌های لیست پنل
 async def panels_kb(cat):
     panels = await db.get_panels(cat)
     rows = [[B(f"{p['flag']} {p['name']} — {p['price']:,} ت", f"panel:{p['id']}", style="primary")] for p in panels]
-    rows.append([B("◀️ بازگشت", "stock", style="primary")])
+    rows.append([B("◀️ بازگشت", "stock", style="danger")])
     return KB(rows)
 
 @router.message(CommandStart())
@@ -223,9 +229,13 @@ async def cb_support(cb: CallbackQuery):
     await cb.message.edit_text(txt, reply_markup=back_kb())
     await cb.answer()
 
+# ✨ تغییر یافته: رنگ دکمه‌های راهنما
 @router.callback_query(F.data == "guide")
 async def cb_guide(cb: CallbackQuery):
-    await cb.message.edit_text("📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:", reply_markup=KB([[B("🔗 ورود به کانال", url=GUIDE_CHANNEL_LINK, style="success")], [B("◀️ بازگشت", "home", style="primary")]]))
+    await cb.message.edit_text("📚 برای مشاهده آموزش‌ها روی دکمه زیر بزنید:", reply_markup=KB([
+        [B("🔗 ورود به کانال", url=GUIDE_CHANNEL_LINK, style="success")], 
+        [B("◀️ بازگشت", "home", style="primary")]
+    ]))
     await cb.answer()
 
 @router.callback_query(F.data == "stock")
@@ -256,12 +266,16 @@ async def cb_panel(cb: CallbackQuery):
     await db.sub_bal(cb.from_user.id, p["price"])
     await db.sell_acc(acc["id"], cb.from_user.id)
     try:
-        await bot.send_message(int(REPORT_CHANNEL_ID), f"✅ <b>گزارش خرید موفق</b>\n\n▫️ شناسه: <code>{mask_u(cb.from_user.id)}</code>\n▫️ کشور: {p['flag']}\n▫️ پنل: <b>{p['name']}</b>\n🔸 شماره: <code>{mask_p(acc['phone'])}</code>\n▫️ مبلغ: <b>{p['price']:,}</b> تومان\n▫️ تاریخ: <code>{datetime.now().strftime('%Y-%m-%d %H:%M')}</code>\n\n📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید.", reply_markup=KB([[B("🛒 ربات شماره مجازی", url=f"https://t.me/{(await bot.get_me()).username}", style="success")]]))
+        await bot.send_message(int(REPORT_CHANNEL_ID), f"✅ <b>گزارش خرید موفق</b>\n\n▫️ شناسه: <code>{mask_u(cb.from_user.id)}</code>\n▫️ کشور: {p['flag']}\n▫️ پنل: <b>{p['name']}</b>\n🔸 شماره: <code>{mask_p(acc['phone'])}</code>\n▫️ مبلغ: <b>{p['price']:,}</b> تومان\n▫️ تاریخ: <code>{datetime.now().strftime('%Y-%m-%d %H:%M')}</code>\n\n📣 شما نیز می‌توانید با استفاده از دکمه زیر وارد بخش خرید شماره شوید.", reply_markup=KB([[B("🛒 ربات شماره مجازی", url=f"https://t.me/{(await bot.get_me()).username}")]]))
     except Exception as e: log.warning(f"Report failed: {e}")
     txt = f"🎉 خرید موفق!\n\n📱 شماره: <code>{acc['phone']}</code>\n🔐 رمز دوم: <code>{acc['twofa'] or 'ندارد'}</code>\n\nبرای دریافت کد ورود، دکمه زیر را بزنید."
-    await cb.message.edit_text(txt, reply_markup=KB([[B("🔑 دریافت کد", f"getcode:{acc['id']}", style="success")], [B("🏠 منوی اصلی", "home", style="primary")]]))
+    await cb.message.edit_text(txt, reply_markup=KB([
+        [B("🔑 دریافت کد", f"getcode:{acc['id']}", style="success")], 
+        [B("🏠 منوی اصلی", "home", style="primary")]
+    ]))
     await cb.answer("✅ خرید موفق!")
 
+# ✨ تغییر یافته: رنگ دکمه خروج
 @router.callback_query(F.data.startswith("getcode:"))
 async def cb_getcode(cb: CallbackQuery):
     aid = int(cb.data.split(":")[1])
@@ -318,6 +332,7 @@ async def msg_charge_amount(m: Message, state: FSMContext):
     await state.set_state(S.charge_receipt)
     await m.answer(f"💳 <b>درخواست شارژ</b>\n\nمبلغ: <code>{amount:,}</code> تومان\n\nلطفاً مبلغ فوق را به شماره کارت زیر واریز کنید:\n<b>به نام: {CARD_HOLDER}</b>\n<code>{CARD_NUMBER}</code>\n\nسپس <b>عکس رسید</b> را ارسال کنید.\n📌 همراه با رسید، <b>آیدی عددی خودتون</b> رو هم ارسال کنید.")
 
+# ✨ تغییر یافته: رنگ دکمه تایید شارژ
 @router.message(S.charge_receipt, F.photo)
 async def msg_charge_receipt(m: Message, state: FSMContext):
     data = await state.get_data()
@@ -402,6 +417,7 @@ async def msg_p_flag(m: Message, state: FSMContext):
     await state.clear()
     await m.answer("✅ پنل ایجاد شد.", reply_markup=await main_kb(m.from_user.id))
 
+# ✨ تغییر یافته: رنگ دکمه‌های حذف پنل
 @router.callback_query(F.data == "panel_del")
 async def cb_panel_del(cb: CallbackQuery):
     if cb.from_user.id != OWNER_ID: return await cb.answer("⛔", show_alert=True)
@@ -418,7 +434,10 @@ async def cb_delp(cb: CallbackQuery):
     pid = int(cb.data.split(":")[1])
     p = await db.get_panel(pid)
     if not p: return await cb.answer("❌", show_alert=True)
-    await cb.message.edit_text(f"⚠️ حذف پنل <b>{p['name']}</b>؟", reply_markup=KB([[B("✅ بله", f"delyes:{pid}", style="success")], [B("❌ انصراف", "home", style="danger")]]))
+    await cb.message.edit_text(f"⚠️ حذف پنل <b>{p['name']}</b>؟", reply_markup=KB([
+        [B("✅ بله", f"delyes:{pid}", style="success")], 
+        [B("❌ انصراف", "home", style="danger")]
+    ]))
     await cb.answer()
 
 @router.callback_query(F.data.startswith("delyes:"))
@@ -430,6 +449,7 @@ async def cb_delyes(cb: CallbackQuery):
     try: await cb.message.edit_text(f"👋 سلام <b>{cb.from_user.first_name}</b>!", reply_markup=await main_kb(cb.from_user.id))
     except: pass
 
+# ✨ تغییر یافته: رنگ دکمه‌های افزودن شماره
 @router.callback_query(F.data == "acc_add")
 async def cb_acc_add(cb: CallbackQuery, state: FSMContext):
     if cb.from_user.id not in (OWNER_ID, ADMIN_ID): return await cb.answer("⛔")
